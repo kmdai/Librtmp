@@ -25,8 +25,6 @@ add_definitions(-DUSE_POLARSSL)
 
 add_library(${librtmp} SHARED ${src})
 
-#target_link_libraries(${librtmp} polarssl)
-
 #链接polarssl库
 #添加libz库
 find_library(z-lib z)

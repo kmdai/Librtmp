@@ -6,4 +6,13 @@ add_subdirectory(polarssl-1.2.19)
 add_subdirectory(librtmp)
 
 set(src
-    push.c)
+    rtmp_push.h
+    rtmp_push.c
+    rtmp_native.c
+    rtmp_util.h
+    rtmp_util.c)
+
+add_library(push SHARED ${src})
+
+find_library(lib-log log)
+target_link_libraries(push rtmp ${lib-log})
