@@ -112,7 +112,7 @@ int send_sps_pps(RTMPMetadata *data, NaluUnit *sps_nalu, NaluUnit *pps_nalu) {
     return ret;
 }
 
-int int send_rtmp_packet(NaluUnit *naluUnit, int keyFrame, int timeStamp, int add_queue) {
+int send_rtmp_packet(NaluUnit *naluUnit, int keyFrame, int timeStamp, int add_queue) {
     __uint8_t *body = (__uint8_t *) malloc(naluUnit->size + 9);
     int i = 1;
     //默认是非关键帧(2:Pframe  7:AVC)

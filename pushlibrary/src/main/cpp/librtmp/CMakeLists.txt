@@ -23,7 +23,7 @@ set(librtmp "rtmp")
 #添加USE_POLARSSL宏定义
 add_definitions(-DUSE_POLARSSL)
 
-add_library(${librtmp} SHARED ${src})
+add_library(${librtmp} STATIC ${src})
 
 #链接polarssl库
 #添加libz库
