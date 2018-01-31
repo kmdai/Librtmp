@@ -25,7 +25,6 @@ public class AvcEncoder {
     int m_height;
     byte[] m_info = null;
     private Surface mSurface;
-    private byte[] yuv420 = null;
     DatagramSocket mSocket;
     InetAddress mInetAddress;
     private Callback mCallback;
@@ -33,13 +32,17 @@ public class AvcEncoder {
     private final int TIMEOUT_US = 10000;
     boolean mIsStop;
     private LibrtmpManager mLibrtmpManager;
+    private int mTimeStamp;
 
     public AvcEncoder(int width, int height, int framerate, int bitrate) {
 
         m_width = width;
         m_height = height;
-        yuv420 = new byte[width * height * 3 / 2];
         mLibrtmpManager = new LibrtmpManager();
+        mTimeStamp = 1000 / framerate;
+        mLibrtmpManager.rtmpInit();
+        Log.d("------", "mLibrtmpManager.setUrl");
+        mLibrtmpManager.setUrl("rtmp://10.5.51.11/dms/kmdai");
 //        try {
 //            mediaCodec = MediaCodec.createEncoderByType("video/avc");
 //        } catch (IOException e) {
@@ -136,7 +139,7 @@ public class AvcEncoder {
 
     public int offerEncoder(byte[] input, byte[] output) {
         int pos = 0;
-        swapYV12toI420(input, yuv420, m_width, m_height);
+//        swapYV12toI420(input, yuv420, m_width, m_height);
         try {
             ByteBuffer[] inputBuffers = mediaCodec.getInputBuffers();
             ByteBuffer[] outputBuffers = mediaCodec.getOutputBuffers();
@@ -144,8 +147,8 @@ public class AvcEncoder {
             if (inputBufferIndex >= 0) {
                 ByteBuffer inputBuffer = inputBuffers[inputBufferIndex];
                 inputBuffer.clear();
-                inputBuffer.put(yuv420);
-                mediaCodec.queueInputBuffer(inputBufferIndex, 0, yuv420.length, 0, 0);
+//                inputBuffer.put(yuv420);
+//                mediaCodec.queueInputBuffer(inputBufferIndex, 0, yuv420.length, 0, 0);
             }
 
             MediaCodec.BufferInfo bufferInfo = new MediaCodec.BufferInfo();
@@ -176,9 +179,9 @@ public class AvcEncoder {
 
             if (output[4] == 0x65) //key frame
             {
-                System.arraycopy(output, 0, yuv420, 0, pos);
+//                System.arraycopy(output, 0, yuv420, 0, pos);
                 System.arraycopy(m_info, 0, output, 0, m_info.length);
-                System.arraycopy(yuv420, 0, output, m_info.length, pos);
+//                System.arraycopy(yuv420, 0, output, m_info.length, pos);
                 pos += m_info.length;
             }
 
@@ -210,43 +213,50 @@ public class AvcEncoder {
                     break;
                 }
                 int outputBufferId = mediaCodec.dequeueOutputBuffer(bufferInfo, TIMEOUT_US);
-                if (bufferInfo.flags == MediaCodec.BUFFER_FLAG_CODEC_CONFIG) {
+                if (outputBufferId >= 0 && bufferInfo.flags == MediaCodec.BUFFER_FLAG_CODEC_CONFIG) {
                     ByteBuffer outputBuffer = mediaCodec.getOutputBuffer(outputBufferId);
                     byte[] outData = new byte[bufferInfo.size];
                     outputBuffer.get(outData, 0, bufferInfo.size);
                     mLibrtmpManager.setSpsPps(outData, bufferInfo.size);
                 }
-                if (bufferInfo.flags == MediaCodec.BUFFER_FLAG_KEY_FRAME) {
-                    Log.d("---", "bufferInfo.size:" + bufferInfo.size);
-                }
-                if (outputBufferId >= 0) {
+                if (outputBufferId >= 0 && bufferInfo.flags != MediaCodec.BUFFER_FLAG_CODEC_CONFIG) {
+
                     ByteBuffer outputBuffer = mediaCodec.getOutputBuffer(outputBufferId);
-                    mByteBuffer.clear();
-                    mByteBuffer.putLong(bufferInfo.presentationTimeUs);
-                    byte[] presentationTimeUs = mByteBuffer.array();
+//                    mByteBuffer.clear();
+//                    Log.d("---", "bufferInfo.presentationTimeUs:" + bufferInfo.presentationTimeUs);
+                    byte[] outData = new byte[bufferInfo.size];
+                    outputBuffer.get(outData, 0, bufferInfo.size);
+                    Log.d("---", "bufferInfo.size:" + bufferInfo.size);
+                    if (bufferInfo.flags == MediaCodec.BUFFER_FLAG_KEY_FRAME) {
+                        mLibrtmpManager.sendChunk(outData, bufferInfo.size, 1, mTimeStamp);
+                    } else {
+                        mLibrtmpManager.sendChunk(outData, bufferInfo.size, 0, mTimeStamp);
+                    }
+//                    mByteBuffer.putLong(bufferInfo.presentationTimeUs);
+//                    byte[] presentationTimeUs = mByteBuffer.array();
 //                    Log.d("---10", ":" + bufferInfo.size);
 //                    Log.d("---16", ":" + Integer.toString(bufferInfo.size, 16));
-                    if (bufferInfo.size > mPackageSize) {
-                        presentationTimeUs[0] = 0x1;
-                        byte[] outData = new byte[bufferInfo.size];
-                        outputBuffer.get(outData, 0, bufferInfo.size);
-
-                        byte[] out1 = new byte[mPackageSize + 8];
-                        System.arraycopy(outData, 0, out1, 8, mPackageSize);
-                        System.arraycopy(presentationTimeUs, 0, out1, 0, 8);
-                        send(out1);
-                        Log.d("send---", "out1:" + out1.length);
-                        byte[] out2 = new byte[outData.length - mPackageSize + 8];
-                        System.arraycopy(outData, mPackageSize, out2, 8, outData.length - mPackageSize);
-                        System.arraycopy(presentationTimeUs, 0, out2, 0, 8);
-                        send(out2);
-                        Log.d("send---", "out2:" + out2.length);
-                    } else {
-                        byte[] outData = new byte[bufferInfo.size + 8];
-                        outputBuffer.get(outData, 8, bufferInfo.size);
-                        System.arraycopy(presentationTimeUs, 0, outData, 0, 8);
-                        send(outData);
-                    }
+//                    if (bufferInfo.size > mPackageSize) {
+//                        presentationTimeUs[0] = 0x1;
+//                        byte[] outData = new byte[bufferInfo.size];
+//                        outputBuffer.get(outData, 0, bufferInfo.size);
+//
+//                        byte[] out1 = new byte[mPackageSize + 8];
+//                        System.arraycopy(outData, 0, out1, 8, mPackageSize);
+//                        System.arraycopy(presentationTimeUs, 0, out1, 0, 8);
+//                        send(out1);
+//                        Log.d("send---", "out1:" + out1.length);
+//                        byte[] out2 = new byte[outData.length - mPackageSize + 8];
+//                        System.arraycopy(outData, mPackageSize, out2, 8, outData.length - mPackageSize);
+//                        System.arraycopy(presentationTimeUs, 0, out2, 0, 8);
+//                        send(out2);
+//                        Log.d("send---", "out2:" + out2.length);
+//                    } else {
+//                        byte[] outData = new byte[bufferInfo.size + 8];
+//                        outputBuffer.get(outData, 8, bufferInfo.size);
+//                        System.arraycopy(presentationTimeUs, 0, outData, 0, 8);
+//                        send(outData);
+//                    }
 
 //                outputBuffer.get(outData);
 //                    outputBuffer.get(outData, 8, bufferInfo.size);
@@ -278,6 +288,7 @@ public class AvcEncoder {
                 mediaCodec.stop();
                 mediaCodec.release();
                 Log.d("---", ":release");
+                mLibrtmpManager.rtmpFree();
             } catch (Exception e) {
                 e.printStackTrace();
             }

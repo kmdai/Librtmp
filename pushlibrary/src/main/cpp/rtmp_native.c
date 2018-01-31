@@ -4,27 +4,30 @@
 
 #include <jni.h>
 #include "rtmp_push.h"
+#include <malloc.h>
 
 JNIEXPORT jboolean JNICALL
 Java_com_kmdai_rtmppush_LibrtmpManager_rtmpInit(JNIEnv *env, jobject instance) {
 
-    // TODO
-
+    rtmp_init();
 }
 
 JNIEXPORT jboolean JNICALL
 Java_com_kmdai_rtmppush_LibrtmpManager_rtmpFree(JNIEnv *env, jobject instance) {
-
-    // TODO
-
+    rtmp_free();
 }
 
 JNIEXPORT void JNICALL
-Java_com_kmdai_rtmppush_LibrtmpManager_sendChunk(JNIEnv *env, jobject instance, jbyteArray chunk_) {
+Java_com_kmdai_rtmppush_LibrtmpManager_sendChunk(JNIEnv *env, jobject instance, jbyteArray chunk_,
+                                                 jint size, jint keyframe, jlong timestamp) {
     jbyte *chunk = (*env)->GetByteArrayElements(env, chunk_, NULL);
 
-    // TODO
-
+    NaluUnit *naluUnit = (NaluUnit *) malloc(sizeof(NaluUnit) + size);
+    naluUnit->data = (uint8_t *) naluUnit + sizeof(NaluUnit);
+    naluUnit->size = size;
+    memcpy(naluUnit->data, chunk, size);
+    send_rtmp_packet(naluUnit, keyframe, timestamp, 1);
+    free(naluUnit);
     (*env)->ReleaseByteArrayElements(env, chunk_, chunk, 0);
 }
 
@@ -32,7 +35,7 @@ JNIEXPORT void JNICALL
 Java_com_kmdai_rtmppush_LibrtmpManager_setUrl(JNIEnv *env, jobject instance, jstring url_) {
     const char *url = (*env)->GetStringUTFChars(env, url_, 0);
 
-    // TODO
+    set_Connect(url);
 
     (*env)->ReleaseStringUTFChars(env, url_, url);
 }
@@ -41,8 +44,7 @@ JNIEXPORT void JNICALL
 Java_com_kmdai_rtmppush_LibrtmpManager_setSpsPps(JNIEnv *env, jobject instance, jbyteArray data_,
                                                  jint size) {
     jbyte *data = (*env)->GetByteArrayElements(env, data_, NULL);
-    // TODO
-    read_nalu_sps_pps(NULL, NULL, data, size, 0);
+    set_sps_pps(data, size);
     (*env)->ReleaseByteArrayElements(env, data_, data, 0);
 }
 

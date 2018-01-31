@@ -6,6 +6,7 @@
 #define LIBRTMP_RTMP_PUSH_H
 
 #include "librtmp/rtmp.h"
+#include "librtmp/amf.h"
 #include <memory.h>
 #include <stdio.h>
 #include "rtmp_util.h"
@@ -17,6 +18,10 @@
  * RTMPPacket 包大小
  */
 #define RTMP_PACKET_SIZE sizeof(RTMPPacket) + RTMP_MAX_HEADER_SIZE
+
+#define SPS_PPS_HEAD_SIZE 20
+
+#define TAG "rtmp----"
 /**
  * _RTMPMetadata
  * 内部结构体。该结构体主要用于存储和传递元数据信息
@@ -27,9 +32,9 @@ typedef struct _RTMPMetadata {
     unsigned int nHeight;
     unsigned int nFrameRate;
     unsigned int nSpsLen;
-    __uint8_t *Sps;
+    uint8_t *Sps;
     unsigned int nPpsLen;
-    __uint8_t *Pps;
+    uint8_t *Pps;
 } RTMPMetadata;
 
 /**
@@ -39,7 +44,7 @@ typedef struct _RTMPMetadata {
 typedef struct _NaluUnit {
     int type;
     int size;
-    unsigned char *data;
+    uint8_t *data;
 } NaluUnit;
 /**
  * nalu头
@@ -49,14 +54,14 @@ RTMP *m_pRtmp;
 /**
  * sps、pps数据
  */
-RTMPPacket m_pSPS_PPS;
+RTMPPacket *m_pSPS_PPS;
 
 /**
  * 设置url
  * @param r
  * @param url
  */
-int set_Connect(RTMP *r, char *url);
+int set_Connect(char *url);
 
 /**
  * 初始化rtmp
@@ -72,8 +77,8 @@ void rtmp_free();
  * @param data
  * @return
  */
-int read_nalu_sps_pps(NaluUnit *nalu_sps, NaluUnit *nalu_pps, __uint8_t *data, __int32_t size,
-                      __int32_t offset);
+int read_nalu_sps_pps(NaluUnit *nalu_sps, NaluUnit *nalu_pps, uint8_t *data, int32_t size,
+                      int32_t offset);
 
 /**
  * 发送sps、pps数据
@@ -82,7 +87,7 @@ int read_nalu_sps_pps(NaluUnit *nalu_sps, NaluUnit *nalu_pps, __uint8_t *data, _
  * @param pps_nalu
  * @return
  */
-int send_sps_pps(RTMPMetadata *data, NaluUnit *sps_nalu, NaluUnit *pps_nalu);
+int send_sps_pps();
 
 /**
  * 发送rtmp包，
@@ -90,6 +95,14 @@ int send_sps_pps(RTMPMetadata *data, NaluUnit *sps_nalu, NaluUnit *pps_nalu);
  * @param add_queue 是否添加发送队列
  * @return
  */
-int send_rtmp_packet(NaluUnit *naluUnit, int keyFrame, int timeStamp, int add_queue);
+int send_rtmp_packet(NaluUnit *naluUnit, int keyFrame, uint32_t timeStamp, int add_queue);
+
+/**
+ * 设置sps、pps
+ * @param data
+ * @param size
+ * @return
+ */
+void set_sps_pps(uint8_t *data, uint32_t size);
 
 #endif //LIBRTMP_RTMP_PUSH_H

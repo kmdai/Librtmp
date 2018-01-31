@@ -5,7 +5,6 @@ package com.kmdai.rtmppush;
  */
 
 public class LibrtmpManager {
-
     {
         System.loadLibrary("push");
     }
@@ -26,7 +25,7 @@ public class LibrtmpManager {
      *
      * @param chunk
      */
-    public native void sendChunk(byte[] chunk);
+    public native void sendChunk(byte[] chunk, int size, int keyFrame, long timestamp);
 
     /**
      * 设置sps、pps数据
