@@ -90,9 +90,9 @@ int send_rtmp_packet(NaluUnit *naluUnit, int keyFrame, uint32_t timeStamp, int a
     body[i++] = 0x00;
     body[i++] = 0x00;
 
-    body[i++] = naluUnit->size >> 24 & 0xff;
-    body[i++] = naluUnit->size >> 16 & 0xff;
-    body[i++] = naluUnit->size >> 8 & 0xff;
+    body[i++] = (naluUnit->size >> 24) & 0xff;
+    body[i++] = (naluUnit->size >> 16) & 0xff;
+    body[i++] = (naluUnit->size >> 8) & 0xff;
     body[i++] = naluUnit->size & 0xff;
     if (keyFrame) {
         LOG_V("keyFrame---", "%s", "send_rtmp_packet---keyFrame");
@@ -103,23 +103,24 @@ int send_rtmp_packet(NaluUnit *naluUnit, int keyFrame, uint32_t timeStamp, int a
     memcpy(&body[i], naluUnit->data, naluUnit->size);
 
     int body_size = i + naluUnit->size;
-    RTMPPacket *packet = (RTMPPacket *) malloc(RTMP_PACKET_SIZE + body_size);
-    packet->m_body = (char *) packet + RTMP_PACKET_SIZE;
-    packet->m_nBodySize = naluUnit->size;
-    memcpy(packet->m_body, body, body_size);
-    packet->m_hasAbsTimestamp = 0;
-    packet->m_packetType = RTMP_PACKET_TYPE_VIDEO;
-    packet->m_nInfoField2 = m_pRtmp->m_stream_id;
-    packet->m_nChannel = 0x04;
+    RTMPPacket packet;
+    RTMPPacket_Reset(&packet);
+    RTMPPacket_Alloc(&packet, body_size);
+    packet.m_nBodySize = naluUnit->size;
+    memcpy(packet.m_body, body, body_size);
+    packet.m_hasAbsTimestamp = 0;
+    packet.m_packetType = RTMP_PACKET_TYPE_VIDEO;
+    packet.m_nInfoField2 = m_pRtmp->m_stream_id;
+    packet.m_nChannel = 0x04;
 
-    packet->m_headerType = RTMP_PACKET_SIZE_LARGE;
-    packet->m_nTimeStamp = timeStamp;
+    packet.m_headerType = RTMP_PACKET_SIZE_LARGE;
+    packet.m_nTimeStamp = timeStamp;
     int ret = 0;
     if (RTMP_IsConnected(m_pRtmp)) {
-        ret = RTMP_SendPacket(m_pRtmp, packet, TRUE);
+        ret = RTMP_SendPacket(m_pRtmp, &packet, TRUE);
         LOG_V("RTMP_SendPacket----", "%s", "------");
     }
-    RTMPPacket_Free(packet);
+    RTMPPacket_Free(&packet);
     free(body);
 //    free(naluUnit);
     return ret;
