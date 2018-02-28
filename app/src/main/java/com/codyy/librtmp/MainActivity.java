@@ -140,6 +140,7 @@ public class MainActivity extends Activity {
     private void stopScreenSharing() {
         if (mVirtualDisplay != null) {
             mVirtualDisplay.release();
+            mMediaProjection.stop();
             mVirtualDisplay = null;
             avcCodec.close();
         }

@@ -4,10 +4,13 @@ import android.media.MediaCodec;
 import android.media.MediaCodecInfo;
 import android.media.MediaCodecList;
 import android.media.MediaFormat;
+import android.os.Handler;
+import android.os.HandlerThread;
+import android.os.Message;
 import android.util.Log;
 import android.view.Surface;
 
-import com.kmdai.rtmppush.LibrtmpManager;
+import net.butterflytv.rtmp_client.RTMPMuxer;
 
 import java.io.IOException;
 import java.net.DatagramPacket;
@@ -31,24 +34,32 @@ public class AvcEncoder {
     ByteBuffer mByteBuffer;
     private final int TIMEOUT_US = 10000;
     boolean mIsStop;
-    private LibrtmpManager mLibrtmpManager;
+//    private LibrtmpManager mLibrtmpManager;
     private int mTimeStamp;
+                RTMPMuxer mRTMPMuxer;
+    private HandlerThread mHandlerThread;
+    private Handler mHandler;
+    int indexTime = 0;
 
-    public AvcEncoder(int width, int height, int framerate, int bitrate) {
-
+    public AvcEncoder(int width, int height, final int framerate, int bitrate) {
+        mIsStop = false;
         m_width = width;
         m_height = height;
-        mLibrtmpManager = new LibrtmpManager();
         mTimeStamp = 1000 / framerate;
-        mLibrtmpManager.rtmpInit();
-        Log.d("------", "mLibrtmpManager.setUrl");
-        mLibrtmpManager.setUrl("rtmp://10.5.51.11/dms/kmdai");
+//        mLibrtmpManager = new LibrtmpManager();
+//        mLibrtmpManager.rtmpInit();
+////        Log.d("------", "mLibrtmpManager.setUrl");
+//        mLibrtmpManager.setUrl("rtmp://10.5.225.38:1935/srs/kmdai");
 //        try {
 //            mediaCodec = MediaCodec.createEncoderByType("video/avc");
 //        } catch (IOException e) {
 //            e.printStackTrace();
 //            return;
-//        }
+////        }
+        reset();
+        mRTMPMuxer = new RTMPMuxer();
+        mRTMPMuxer.open("rtmp://10.5.225.38:1935/srs/kmdai", width, height);
+//       mRTMPMuxer.write_flv_header(false,true);
         try {
             mSocket = new DatagramSocket();
             mInetAddress = InetAddress.getByName("192.168.3.126");
@@ -59,6 +70,41 @@ public class AvcEncoder {
             // TODO Auto-generated catch block
             e.printStackTrace();
         }
+        mHandlerThread = new HandlerThread("sendframe");
+        mHandlerThread.start();
+        mHandler = new Handler(mHandlerThread.getLooper(), new Handler.Callback() {
+            @Override
+            public boolean handleMessage(Message msg) {
+                Frame frame = (Frame) msg.obj;
+                Log.d("------", ":" + getTimeIndex());
+                mRTMPMuxer.writeVideo(frame.getData(), 0, frame.getSize(), indexTime);
+                indexTime += 33;
+//                if (frame.getType() == MediaCodec.BUFFER_FLAG_CODEC_CONFIG) {
+////                    int i = 4;
+////                    for (; ; ) {
+////                        if (frame.mData[i++] == 0x00 && frame.mData[i++] == 0x00 && frame.mData[i++] == 0x00 && frame.mData[i++] == 0x01) {
+////                            break;
+////                        }
+////                    }
+////                    byte[] sps = new byte[i - 8];
+////                    System.arraycopy(frame.getData(), 4, sps, 0, sps.length);
+////                    byte[] pps = new byte[frame.getSize() - i];
+////                    System.arraycopy(frame.getData(), i, pps, 0, pps.length);
+//                    mLibrtmpManager.setSpsPps(frame.getData(), frame.mSize);
+////                    mLibrtmpManager.sendSpsPPs(sps, sps.length, pps, pps.length);
+//                } else {
+//                    byte[] data = new byte[frame.mSize - 4];
+//                    System.arraycopy(frame.getData(), 4, data, 0, data.length);
+//                    int time = getTimeIndex();
+//                    if (time <= 0) {
+//                        return false;
+//                    }
+//                    i = i + 33;
+//                    mLibrtmpManager.sendChunk(data, data.length, frame.isKeyFrame() ? 1 : 0, i);
+//                }
+                return false;
+            }
+        });
         MediaFormat mediaFormat = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, width, height);
         mediaFormat.setInteger(MediaFormat.KEY_BIT_RATE, bitrate);
         mediaFormat.setInteger(MediaFormat.KEY_FRAME_RATE, framerate);
@@ -98,9 +144,9 @@ public class AvcEncoder {
 ////                Log.d("---", ":" + bufferInfo.presentationTimeUs);
 //                mByteBuffer.putLong(bufferInfo.presentationTimeUs);
 //                byte[] presentationTimeUs = mByteBuffer.array();
-//                byte[] outData = new byte[bufferInfo.size + 8];
+//                byte[] outData = new byte[bufferInfo.mSize + 8];
 ////                outputBuffer.get(outData);
-//                outputBuffer.get(outData, 8, bufferInfo.size);
+//                outputBuffer.get(outData, 8, bufferInfo.mSize);
 //                System.arraycopy(presentationTimeUs, 0, outData, 0, 8);
 //                if (mCallback != null) {
 //                    mCallback.onOutputBufferAvailable(outData);
@@ -213,33 +259,47 @@ public class AvcEncoder {
                     break;
                 }
                 int outputBufferId = mediaCodec.dequeueOutputBuffer(bufferInfo, TIMEOUT_US);
-                if (outputBufferId >= 0 && bufferInfo.flags == MediaCodec.BUFFER_FLAG_CODEC_CONFIG) {
+                if (outputBufferId >= 0) {
                     ByteBuffer outputBuffer = mediaCodec.getOutputBuffer(outputBufferId);
                     byte[] outData = new byte[bufferInfo.size];
                     outputBuffer.get(outData, 0, bufferInfo.size);
-                    mLibrtmpManager.setSpsPps(outData, bufferInfo.size);
+                    calcTotalTime(bufferInfo.presentationTimeUs / 1000);
+//                    try {
+//                        mRtmpClient.write(outData);
+//                    } catch (IOException e) {
+//                        e.printStackTrace();
+//                    }
+                    Message message = mHandler.obtainMessage();
+                    message.obj = new Frame(outData, bufferInfo.size, bufferInfo.flags, bufferInfo.flags == MediaCodec.BUFFER_FLAG_KEY_FRAME);
+                    mHandler.sendMessage(message);
+                }
+                if (outputBufferId >= 0 && bufferInfo.flags == MediaCodec.BUFFER_FLAG_CODEC_CONFIG) {
+//                    ByteBuffer outputBuffer = mediaCodec.getOutputBuffer(outputBufferId);
+//                    byte[] outData = new byte[bufferInfo.mSize];
+//                    outputBuffer.get(outData, 0, bufferInfo.mSize);
+////                    mLibrtmpManager.setSpsPps(outData, bufferInfo.mSize);
                 }
                 if (outputBufferId >= 0 && bufferInfo.flags != MediaCodec.BUFFER_FLAG_CODEC_CONFIG) {
 
-                    ByteBuffer outputBuffer = mediaCodec.getOutputBuffer(outputBufferId);
+//                    ByteBuffer outputBuffer = mediaCodec.getOutputBuffer(outputBufferId);
 //                    mByteBuffer.clear();
 //                    Log.d("---", "bufferInfo.presentationTimeUs:" + bufferInfo.presentationTimeUs);
-                    byte[] outData = new byte[bufferInfo.size];
-                    outputBuffer.get(outData, 0, bufferInfo.size);
-                    Log.d("---", "bufferInfo.size:" + bufferInfo.size);
-                    if (bufferInfo.flags == MediaCodec.BUFFER_FLAG_KEY_FRAME) {
-                        mLibrtmpManager.sendChunk(outData, bufferInfo.size, 1, mTimeStamp);
-                    } else {
-                        mLibrtmpManager.sendChunk(outData, bufferInfo.size, 0, mTimeStamp);
-                    }
+//                    byte[] outData = new byte[bufferInfo.mSize];
+//                    outputBuffer.get(outData, 0, bufferInfo.mSize);
+//                    Log.d("---", "bufferInfo.mSize:" + bufferInfo.mSize);
+//                    if (bufferInfo.flags == MediaCodec.BUFFER_FLAG_KEY_FRAME) {
+//                        mLibrtmpManager.sendChunk(outData, bufferInfo.mSize, 1, mTimeStamp);
+//                    } else {
+//                        mLibrtmpManager.sendChunk(outData, bufferInfo.mSize, 0, mTimeStamp);
+//                    }
 //                    mByteBuffer.putLong(bufferInfo.presentationTimeUs);
 //                    byte[] presentationTimeUs = mByteBuffer.array();
-//                    Log.d("---10", ":" + bufferInfo.size);
-//                    Log.d("---16", ":" + Integer.toString(bufferInfo.size, 16));
-//                    if (bufferInfo.size > mPackageSize) {
+//                    Log.d("---10", ":" + bufferInfo.mSize);
+//                    Log.d("---16", ":" + Integer.toString(bufferInfo.mSize, 16));
+//                    if (bufferInfo.mSize > mPackageSize) {
 //                        presentationTimeUs[0] = 0x1;
-//                        byte[] outData = new byte[bufferInfo.size];
-//                        outputBuffer.get(outData, 0, bufferInfo.size);
+//                        byte[] outData = new byte[bufferInfo.mSize];
+//                        outputBuffer.get(outData, 0, bufferInfo.mSize);
 //
 //                        byte[] out1 = new byte[mPackageSize + 8];
 //                        System.arraycopy(outData, 0, out1, 8, mPackageSize);
@@ -252,14 +312,14 @@ public class AvcEncoder {
 //                        send(out2);
 //                        Log.d("send---", "out2:" + out2.length);
 //                    } else {
-//                        byte[] outData = new byte[bufferInfo.size + 8];
-//                        outputBuffer.get(outData, 8, bufferInfo.size);
+//                        byte[] outData = new byte[bufferInfo.mSize + 8];
+//                        outputBuffer.get(outData, 8, bufferInfo.mSize);
 //                        System.arraycopy(presentationTimeUs, 0, outData, 0, 8);
 //                        send(outData);
 //                    }
 
 //                outputBuffer.get(outData);
-//                    outputBuffer.get(outData, 8, bufferInfo.size);
+//                    outputBuffer.get(outData, 8, bufferInfo.mSize);
 //                    System.arraycopy(presentationTimeUs, 0, outData, 0, 8);
 //                    if (outData.length > 60000) {
 //                        presentationTimeUs[0] = 0x1;
@@ -288,7 +348,9 @@ public class AvcEncoder {
                 mediaCodec.stop();
                 mediaCodec.release();
                 Log.d("---", ":release");
-                mLibrtmpManager.rtmpFree();
+//                mLibrtmpManager.rtmpFree();
+                mRTMPMuxer.close();
+                mHandlerThread.quitSafely();
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -301,6 +363,73 @@ public class AvcEncoder {
             mSocket.send(packet);
         } catch (IOException e) {
             e.printStackTrace();
+        }
+    }
+
+    private long lastTimeUs;
+    private int timeIndex;
+
+    public void calcTotalTime(long currentTimeUs) {
+        if (lastTimeUs <= 0) {
+            this.lastTimeUs = currentTimeUs;
+        }
+        int delta = (int) (currentTimeUs - lastTimeUs);
+        this.lastTimeUs = currentTimeUs;
+        timeIndex += delta;
+    }
+
+    public void reset() {
+        lastTimeUs = 0;
+        timeIndex = 0;
+    }
+
+    public int getTimeIndex() {
+        return timeIndex;
+    }
+
+    class Frame {
+        byte[] mData;
+        int mSize;
+        int mType;
+        boolean mKeyFrame;
+
+        Frame(byte[] data, int size, int type, boolean keyFrame) {
+            mData = data;
+            this.mSize = size;
+            mType = type;
+            mKeyFrame = keyFrame;
+        }
+
+        public byte[] getData() {
+            return mData;
+        }
+
+        public boolean isKeyFrame() {
+            return mKeyFrame;
+        }
+
+        public void setKeyFrame(boolean keyFrame) {
+            mKeyFrame = keyFrame;
+        }
+
+        public void setData(byte[] data) {
+            mData = data;
+        }
+
+        public int getSize() {
+            return mSize;
+        }
+
+        public int getType() {
+            return mType;
+        }
+
+        public void setType(int type) {
+            mType = type;
+        }
+
+        public void setSize(int size) {
+            this.mSize = size;
         }
     }
 }

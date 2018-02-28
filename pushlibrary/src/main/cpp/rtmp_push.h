@@ -19,8 +19,7 @@
  */
 #define RTMP_PACKET_SIZE sizeof(RTMPPacket) + RTMP_MAX_HEADER_SIZE
 
-#define SPS_PPS_HEAD_SIZE 20
-
+#define SPS_PPS_HEAD_SIZE 16
 #define TAG "rtmp----"
 /**
  * _RTMPMetadata
@@ -32,8 +31,8 @@ typedef struct _RTMPMetadata {
     unsigned int nHeight;
     unsigned int nFrameRate;
     unsigned int nSpsLen;
-    uint8_t *Sps;
     unsigned int nPpsLen;
+    uint8_t *Sps;
     uint8_t *Pps;
 } RTMPMetadata;
 
@@ -43,7 +42,7 @@ typedef struct _RTMPMetadata {
  */
 typedef struct _NaluUnit {
     int type;
-    int size;
+    uint32_t size;
     uint8_t *data;
 } NaluUnit;
 /**
@@ -54,7 +53,7 @@ RTMP *m_pRtmp;
 /**
  * sps、pps数据
  */
-RTMPPacket *m_pSPS_PPS;
+RTMPMetadata *m_pSPS_PPS;
 
 /**
  * 设置url
@@ -105,4 +104,5 @@ int send_rtmp_packet(NaluUnit *naluUnit, int keyFrame, uint32_t timeStamp, int a
  */
 void set_sps_pps(uint8_t *data, uint32_t size);
 
+int sendSpsAndPps(uint8_t *sps, int spsLen, uint8_t *pps, int ppsLen, long timestamp);
 #endif //LIBRTMP_RTMP_PUSH_H

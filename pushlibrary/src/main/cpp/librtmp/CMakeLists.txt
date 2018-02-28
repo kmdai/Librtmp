@@ -28,4 +28,5 @@ add_library(${librtmp} STATIC ${src})
 #链接polarssl库
 #添加libz库
 find_library(z-lib z)
-target_link_libraries(${librtmp} ${z-lib} polarssl)
+find_library(log-lib log)
+target_link_libraries(${librtmp} ${z-lib} polarssl ${log-lib})

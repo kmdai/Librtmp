@@ -33,4 +33,6 @@ public class LibrtmpManager {
      * @param data
      */
     public native void setSpsPps(byte[] data, int size);
+
+    public native void sendSpsPPs(byte[] sps, int spsLen,byte[] pps, int ppsLen);
 }

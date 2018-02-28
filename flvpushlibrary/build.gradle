@@ -2,18 +2,21 @@ apply plugin: 'com.android.library'
 
 android {
     compileSdkVersion 26
+
+
+
     defaultConfig {
         minSdkVersion 19
         targetSdkVersion 26
         versionCode 1
         versionName "1.0"
+
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
         externalNativeBuild {
             cmake {
-                abiFilters 'armeabi-v7a', 'x86', 'arm64-v8a', 'x86_64'
                 cppFlags "-frtti -fexceptions"
-                arguments "-DCMAKE_BUILD_TYPE:String=Debug"
-//                ,'-DCMAKE_LIBRARY_OUTPUT_DIRECTORY=/home/kmdai/mnt/openSource/Librtmp/pushlibrary/src/main/jniLibs/${ANDROID_ABI}'
+                arguments '-DANDROID_PLATFORM=android-15'
+                abiFilters 'x86', 'x86_64', 'armeabi', 'armeabi-v7a', 'arm64-v8a'
             }
         }
     }
@@ -26,13 +29,7 @@ android {
     }
     externalNativeBuild {
         cmake {
-            path "src/main/cpp/CMakeLists.txt"
-//            buildStagingDirectory "src/main/jniLibs"
-        }
-    }
-    sourceSets {
-        main {
-//            jniLibs.srcDirs = []
+            path "CMakeLists.txt"
         }
     }
 }

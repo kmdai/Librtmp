@@ -48,3 +48,14 @@ Java_com_kmdai_rtmppush_LibrtmpManager_setSpsPps(JNIEnv *env, jobject instance, 
     (*env)->ReleaseByteArrayElements(env, data_, data, 0);
 }
 
+JNIEXPORT void JNICALL
+Java_com_kmdai_rtmppush_LibrtmpManager_sendSpsPPs(JNIEnv *env, jobject instance, jbyteArray sps_,
+                                                  jint spsLen, jbyteArray pps_, jint ppsLen) {
+    jbyte *sps = (*env)->GetByteArrayElements(env, sps_, NULL);
+    jbyte *pps = (*env)->GetByteArrayElements(env, pps_, NULL);
+
+    sendSpsAndPps(sps, spsLen, pps, ppsLen, 0);
+
+    (*env)->ReleaseByteArrayElements(env, sps_, sps, 0);
+    (*env)->ReleaseByteArrayElements(env, pps_, pps, 0);
+}
