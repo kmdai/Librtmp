@@ -10,7 +10,7 @@ import android.os.Message;
 import android.util.Log;
 import android.view.Surface;
 
-import net.butterflytv.rtmp_client.RTMPMuxer;
+import com.kmdai.rtmppush.LibrtmpManager;
 
 import java.io.IOException;
 import java.net.DatagramPacket;
@@ -34,22 +34,22 @@ public class AvcEncoder {
     ByteBuffer mByteBuffer;
     private final int TIMEOUT_US = 10000;
     boolean mIsStop;
-//    private LibrtmpManager mLibrtmpManager;
+    private LibrtmpManager mLibrtmpManager;
     private int mTimeStamp;
-                RTMPMuxer mRTMPMuxer;
+//                RTMPMuxer mRTMPMuxer;
     private HandlerThread mHandlerThread;
     private Handler mHandler;
-    int indexTime = 0;
+    long indexTime = 0;
 
     public AvcEncoder(int width, int height, final int framerate, int bitrate) {
         mIsStop = false;
         m_width = width;
         m_height = height;
         mTimeStamp = 1000 / framerate;
-//        mLibrtmpManager = new LibrtmpManager();
-//        mLibrtmpManager.rtmpInit();
-////        Log.d("------", "mLibrtmpManager.setUrl");
-//        mLibrtmpManager.setUrl("rtmp://10.5.225.38:1935/srs/kmdai");
+        mLibrtmpManager = new LibrtmpManager();
+        mLibrtmpManager.rtmpInit();
+//        Log.d("------", "mLibrtmpManager.setUrl");
+        mLibrtmpManager.setUrl("rtmp://10.5.225.38:1935/srs/kmdai");
 //        try {
 //            mediaCodec = MediaCodec.createEncoderByType("video/avc");
 //        } catch (IOException e) {
@@ -57,8 +57,8 @@ public class AvcEncoder {
 //            return;
 ////        }
         reset();
-        mRTMPMuxer = new RTMPMuxer();
-        mRTMPMuxer.open("rtmp://10.5.225.38:1935/srs/kmdai", width, height);
+//        mRTMPMuxer = new RTMPMuxer();
+//        mRTMPMuxer.open("rtmp://10.5.225.38:1935/srs/kmdai", width, height);
 //       mRTMPMuxer.write_flv_header(false,true);
         try {
             mSocket = new DatagramSocket();
@@ -76,39 +76,38 @@ public class AvcEncoder {
             @Override
             public boolean handleMessage(Message msg) {
                 Frame frame = (Frame) msg.obj;
-                Log.d("------", ":" + getTimeIndex());
-                mRTMPMuxer.writeVideo(frame.getData(), 0, frame.getSize(), indexTime);
-                indexTime += 33;
-//                if (frame.getType() == MediaCodec.BUFFER_FLAG_CODEC_CONFIG) {
-////                    int i = 4;
-////                    for (; ; ) {
-////                        if (frame.mData[i++] == 0x00 && frame.mData[i++] == 0x00 && frame.mData[i++] == 0x00 && frame.mData[i++] == 0x01) {
-////                            break;
-////                        }
-////                    }
-////                    byte[] sps = new byte[i - 8];
-////                    System.arraycopy(frame.getData(), 4, sps, 0, sps.length);
-////                    byte[] pps = new byte[frame.getSize() - i];
-////                    System.arraycopy(frame.getData(), i, pps, 0, pps.length);
-//                    mLibrtmpManager.setSpsPps(frame.getData(), frame.mSize);
-////                    mLibrtmpManager.sendSpsPPs(sps, sps.length, pps, pps.length);
-//                } else {
-//                    byte[] data = new byte[frame.mSize - 4];
-//                    System.arraycopy(frame.getData(), 4, data, 0, data.length);
+//                Log.d("------", ":" + getTimeIndex());
+//                mRTMPMuxer.writeVideo(frame.getData(), 0, frame.getSize(), getTimeIndex());
+                if (frame.getType() == MediaCodec.BUFFER_FLAG_CODEC_CONFIG) {
+//                    int i = 4;
+//                    for (; ; ) {
+//                        if (frame.mData[i++] == 0x00 && frame.mData[i++] == 0x00 && frame.mData[i++] == 0x00 && frame.mData[i++] == 0x01) {
+//                            break;
+//                        }
+//                    }
+//                    byte[] sps = new byte[i - 8];
+//                    System.arraycopy(frame.getData(), 4, sps, 0, sps.length);
+//                    byte[] pps = new byte[frame.getSize() - i];
+//                    System.arraycopy(frame.getData(), i, pps, 0, pps.length);
+                    mLibrtmpManager.setSpsPps(frame.getData(), frame.mSize);
+//                    mLibrtmpManager.sendSpsPPs(sps, sps.length, pps, pps.length);
+                } else {
+                    indexTime += 33;
+                    byte[] data = new byte[frame.mSize - 4];
+                    System.arraycopy(frame.getData(), 4, data, 0, data.length);
 //                    int time = getTimeIndex();
 //                    if (time <= 0) {
 //                        return false;
 //                    }
-//                    i = i + 33;
-//                    mLibrtmpManager.sendChunk(data, data.length, frame.isKeyFrame() ? 1 : 0, i);
-//                }
+                    mLibrtmpManager.sendChunk(data, data.length, frame.isKeyFrame() ? 1 : 0, getTimeIndex());
+                }
                 return false;
             }
         });
         MediaFormat mediaFormat = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, width, height);
         mediaFormat.setInteger(MediaFormat.KEY_BIT_RATE, bitrate);
         mediaFormat.setInteger(MediaFormat.KEY_FRAME_RATE, framerate);
-        mediaFormat.setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AVCProfileBaseline);
+        mediaFormat.setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AVCProfileMain);
         mediaFormat.setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface);
         mediaFormat.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1);
         MediaCodecList mediaCodecList = new MediaCodecList(MediaCodecList.REGULAR_CODECS);
@@ -348,8 +347,8 @@ public class AvcEncoder {
                 mediaCodec.stop();
                 mediaCodec.release();
                 Log.d("---", ":release");
-//                mLibrtmpManager.rtmpFree();
-                mRTMPMuxer.close();
+                mLibrtmpManager.rtmpFree();
+//                mRTMPMuxer.close();
                 mHandlerThread.quitSafely();
             } catch (Exception e) {
                 e.printStackTrace();
@@ -374,8 +373,8 @@ public class AvcEncoder {
             this.lastTimeUs = currentTimeUs;
         }
         int delta = (int) (currentTimeUs - lastTimeUs);
-        this.lastTimeUs = currentTimeUs;
-        timeIndex += delta;
+//        this.lastTimeUs = currentTimeUs;
+        timeIndex = delta;
     }
 
     public void reset() {

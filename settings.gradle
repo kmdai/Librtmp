@@ -1,1 +1,1 @@
-include ':app', ':pushlibrary', ':flvpushlibrary'
+include ':app', ':pushlibrary', ':flvpushlibrary', ':srslibrtmp'
