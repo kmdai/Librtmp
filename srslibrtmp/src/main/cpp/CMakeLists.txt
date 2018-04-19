@@ -83,4 +83,13 @@ set(srs-librtmp
    ${libs}
    ${protocol})
    
-add_library(srsrtmp SHARED ${srs-librtmp})
+add_library(srsrtmp STATIC ${srs-librtmp})
+
+set(push
+    push/push_rtmp.c
+    push/push_rtmp.h
+    push/push_native.c)
+
+add_library(srsPush SHARED ${push})
+
+target_link_libraries(srsPush srsrtmp)
