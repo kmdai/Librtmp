@@ -7,8 +7,10 @@ import android.media.MediaFormat;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Message;
+import android.text.TextUtils;
 import android.util.Log;
 import android.view.Surface;
+import android.widget.TextView;
 
 import com.kmdai.rtmppush.LibrtmpManager;
 
@@ -113,8 +115,12 @@ public class AvcEncoder {
         MediaCodecList mediaCodecList = new MediaCodecList(MediaCodecList.REGULAR_CODECS);
         MediaCodecInfo[] mediaCodecInfos = mediaCodecList.getCodecInfos();
         String name = mediaCodecList.findEncoderForFormat(mediaFormat);
+        if(TextUtils.isEmpty(name)){
+            Log.e("-------","name is null");
+            return;
+        }
         mByteBuffer = ByteBuffer.allocate(8);
-        Log.d("AvcEncoder---", name);
+//        Log.d("AvcEncoder---", name);
         for (MediaCodecInfo mediaCodecInfo : mediaCodecInfos) {
             String[] strings = mediaCodecInfo.getSupportedTypes();
             String str = "";

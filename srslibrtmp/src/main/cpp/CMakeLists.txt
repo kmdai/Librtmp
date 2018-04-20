@@ -75,14 +75,21 @@ include_directories(kernel/)
 include_directories(libs/)
 include_directories(protocol/)
 
-add_definitions(-D__arm__)
+#根据不同的平台定义不同的宏
+if(${ANDROID_ABI} STREQUAL x86_64)
+    add_definitions(-D__x86_64__)
+elseif(${ANDROID_ABI} STREQUAL x86)
+    add_definitions(-D__i386__)
+else()
+    add_definitions(-D__arm__)
+endif()
 
 set(srs-librtmp
    ${core}
    ${kernel}
    ${libs}
    ${protocol})
-   
+
 add_library(srsrtmp STATIC ${srs-librtmp})
 
 set(push

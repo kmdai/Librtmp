@@ -16,18 +16,18 @@ int set_Connect(char *url) {
         RTMP_EnableWrite(m_pRtmp);
         if (RTMP_Connect(m_pRtmp, NULL) == FALSE) {
             rtmp_free();
-            LOG_V("RTMP_Connect----FALSE", "%s", url);
+//            LOG_V("RTMP_Connect----FALSE", "%s", url);
             return FALSE;
         }
         if (RTMP_ConnectStream(m_pRtmp, 0) == FALSE) {
-            LOG_V("RTMP_ConnectStream----FALSE", "%s", url);
+//            LOG_V("RTMP_ConnectStream----FALSE", "%s", url);
             rtmp_free();
             return FALSE;
         }
-        LOG_V("set_Connect----TRUE", "%s", url);
+//        LOG_V("set_Connect----TRUE", "%s", url);
         return TRUE;
     }
-    LOG_V("set_Connect----FALSE", "%s", url);
+//    LOG_V("set_Connect----FALSE", "%s", url);
     return FALSE;
 }
 
