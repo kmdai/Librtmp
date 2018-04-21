@@ -95,7 +95,9 @@ add_library(srsrtmp STATIC ${srs-librtmp})
 set(push
     push/push_rtmp.c
     push/push_rtmp.h
-    push/push_native.c)
+    push/push_native.c
+    push/push_queue.h
+    push/push_queue.c)
 
 add_library(srsPush SHARED ${push})
 
