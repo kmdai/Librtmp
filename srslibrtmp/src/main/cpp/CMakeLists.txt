@@ -100,5 +100,5 @@ set(push
     push/push_queue.c)
 
 add_library(srsPush SHARED ${push})
-
-target_link_libraries(srsPush srsrtmp)
+find_library(lib-log log)
+target_link_libraries(srsPush srsrtmp ${lib-log})

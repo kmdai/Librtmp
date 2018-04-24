@@ -9,23 +9,26 @@
 #include <stdio.h>
 #include <malloc.h>
 #include <string.h>
+#include <pthread.h>
 
 #define QUEUW_LENGTH 50
 
 typedef struct node {
     //数据
-    __uint8_t *data;
-    __int32_t size;
-    __int32_t type;
+    char *data;
+    int32_t size;
+    int32_t type;
+    uint32_t time;
     struct node *next;
 } q_node, *q_node_p;
 
 typedef struct list {
     q_node_p front;
     q_node_p rear;
+    pthread_mutex_t mutex;
+    pthread_cond_t cond;
 } q_list;
 
-q_list *queue;
 
 /**
  * 初始化
@@ -53,12 +56,14 @@ q_node_p out_queue();
  */
 int destroy_queue();
 
+void cancel_queue();
+
 /**
  * 创建节点
  * @param data
  * @param size
  * @return
  */
-q_node_p create_node(__uint8_t *data, __int32_t size);
+q_node_p create_node(char *data, int32_t size, int32_t type, uint32_t time);
 
 #endif //LIBRTMP_PUSH_QUEUE_H
