@@ -12,7 +12,9 @@ public class SRSLibrtmpManager {
      *
      * @param url
      */
-    public native void setUrl(String url);
+    public native boolean setUrl(String url);
 
-    public native void addFrame(byte[] data, int size, int type,  int time);
+    public native void addFrame(byte[] data, int size, int type, int time);
+
+    public native void release();
 }

@@ -9,13 +9,12 @@ int32_t cancel = 1;
 
 int init_queue() {
     queue = (q_list *) malloc(sizeof(q_list));
+    cancel = 1;
     if (queue) {
         queue->front = NULL;
         queue->rear = NULL;
         pthread_mutex_init(&queue->mutex, NULL);
         pthread_cond_init(&queue->cond, NULL);
-//        queue->mutex = PTHREAD_MUTEX_INITIALIZER;
-//        queue->cond = PTHREAD_COND_INITIALIZER;
         return 0;
     }
     return 1;
@@ -70,10 +69,8 @@ q_node_p out_queue() {
 }
 
 void cancel_queue() {
-    pthread_mutex_lock(&queue->mutex);
     cancel = 0;
     pthread_cond_signal(&queue->cond);
-    pthread_mutex_unlock(&queue->mutex);
 }
 
 int destroy_queue() {

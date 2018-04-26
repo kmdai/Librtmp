@@ -48,19 +48,21 @@ void add_frame(char *data, int32_t size, int32_t type, uint32_t time) {
 
 void *push_data(void *gVm) {
     JavaVM *gvm = (JavaVM *) gVm;
-    JNIEnv *env;
+    JNIEnv *env = NULL;
     if (0 != (*gvm)->AttachCurrentThread(gVm, &env, NULL)) {
         return (void *) 0;
     }
     for (;;) {
         q_node_p node_p = out_queue();
         if (NULL == node_p) {
+            SRS_LOGE("node_p=NULL");
+            (*gvm)->DetachCurrentThread(gvm);
             return (void *) 1;
         }
+//        SRS_LOGE("push rtmp frame-%d", node_p->size);
         write_raw_frames(node_p->data, node_p->size, node_p->time, node_p->time);
         free(node_p);
     }
-    return (void *) 1;
 }
 
 void rtmp_start(JavaVM *gVm) {

@@ -8,24 +8,33 @@
 
 static JavaVM *javaVM;
 
-void setUrl(JNIEnv *env, jstring url) {
-    const char *rtmp_url = (*env)->GetStringUTFChars(env, url, NULL);
-    init_srs(rtmp_url);
+jboolean setUrl(JNIEnv *env, jobject instance, jstring url) {
+    const char *rtmp_url = (*env)->GetStringUTFChars(env, url, 0);
+    int result = init_srs(rtmp_url);
+    if (result == 0) {
+        rtmp_start(javaVM);
+    }
     (*env)->ReleaseStringUTFChars(env, url, rtmp_url);
+    return result != 0 ? JNI_FALSE : JNI_TRUE;
 }
 
-void addFrame(JNIEnv *env, jbyteArray data, jint size, jint type, jint time) {
+void addFrame(JNIEnv *env, jobject instance, jbyteArray data, jint size, jint type, jint time) {
     jbyte *chunk = (*env)->GetByteArrayElements(env, data, NULL);
     q_node_p node = create_node(chunk, size, type, time);
     in_queue(node);
-    (*env)->ReleaseByteArrayElements(env, chunk, chunk, 0);
+    (*env)->ReleaseByteArrayElements(env, data, chunk, 0);
+}
+
+void release(JNIEnv *env, jobject instance) {
+    rtmp_destroy();
 }
 
 /**
  * 本地函数
  */
 const JNINativeMethod srs_methods[] = {
-        {"setUrl",   "(Ljava/lang/String;)V", (void *) setUrl},
+        {"setUrl",   "(Ljava/lang/String;)Z", (void *) setUrl},
+        {"release",  "()V",                   (void *) release},
         {"addFrame", "([BIII)V",              (void *) addFrame}
 };
 /**
