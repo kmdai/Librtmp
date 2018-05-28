@@ -1,7 +1,5 @@
 package com.kmdai.srslibrtmp;
 
-import android.os.AsyncTask;
-
 public class SRSLibrtmpManager {
     static {
         System.loadLibrary("srsPush");

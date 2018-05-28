@@ -5,7 +5,7 @@
 #include "push_rtmp.h"
 
 #define SRS_ARRAY_ELEMS(a)  (sizeof(a) / sizeof(a[0]))
-
+#define JNI_CLS_MANAGER "com/kmdai/srslibrtmp/SRSLibrtmpManager"
 static JavaVM *javaVM;
 
 jboolean setUrl(JNIEnv *env, jobject instance, jstring url) {
@@ -50,9 +50,9 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
         SRS_LOGE("Env not got");
         return JNI_ERR;
     }
-    jclass clz = (*jenv)->FindClass(jenv, "com/kmdai/srslibrtmp/SRSLibrtmpManager");
+    jclass clz = (*jenv)->FindClass(jenv, JNI_CLS_MANAGER);
     if (clz == NULL) {
-        SRS_LOGE("Class \"com/kmdai/srslibrtmp/SRSLibrtmpManager\" not found");
+        SRS_LOGE("JNI_OnLoad:Class %s not found", JNI_CLS_MANAGER);
         return JNI_ERR;
     }
 
@@ -73,9 +73,9 @@ JNIEXPORT void JNI_OnUnload(JavaVM *vm, void *reserved) {
         SRS_LOGE("Env not got");
         return;
     }
-    jclass clz = (*jenv)->FindClass(jenv, "com/kmdai/srslibrtmp/SRSLibrtmpManager");
+    jclass clz = (*jenv)->FindClass(jenv, JNI_CLS_MANAGER);
     if (clz == NULL) {
-        SRS_LOGE("Class \"com/kmdai/srslibrtmp/SRSLibrtmpManager\" not found");
+        SRS_LOGE("JNI_OnUnload:Class %s not found", JNI_CLS_MANAGER);
         return;
     }
     (*jenv)->UnregisterNatives(jenv, clz);

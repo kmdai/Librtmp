@@ -11,6 +11,7 @@ import android.media.projection.MediaProjection;
 import android.media.projection.MediaProjectionManager;
 import android.os.Bundle;
 import android.util.DisplayMetrics;
+import android.view.Display;
 import android.view.View;
 import android.widget.Toast;
 
@@ -22,24 +23,20 @@ import java.net.UnknownHostException;
 
 public class MainActivity extends Activity {
     public final static int PERMISSION_CODE = 0x0a1;
-    DatagramSocket socket;
-    InetAddress address;
 
     AvcEncoder avcCodec;
     private int mScreenDensity;
     private int mDisplayWidth;
     private int mDisplayHeight;
 
-    int width = mDisplayWidth = 960;
-    int height = mDisplayHeight = 540;
+    int width = mDisplayWidth = 1280;
+    int height = mDisplayHeight = 800;
     int framerate = 30;
-    int bitrate = 60 * 1000 * 1000;
+    int bitrate = 1024 * 1024;
     private MediaProjectionManager mProjectionManager;
     private MediaProjection mMediaProjection;
     private VirtualDisplay mVirtualDisplay;
-    byte[] h264 = new byte[width * height * 3 / 2];
 
-    @SuppressLint("NewApi")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
 
@@ -50,19 +47,8 @@ public class MainActivity extends Activity {
         DisplayMetrics metrics = new DisplayMetrics();
         getWindowManager().getDefaultDisplay().getMetrics(metrics);
         mScreenDensity = metrics.densityDpi;
-        BufferedReader bufferedReader;
         mProjectionManager =
                 (MediaProjectionManager) getSystemService(Context.MEDIA_PROJECTION_SERVICE);
-        try {
-            socket = new DatagramSocket();
-            address = InetAddress.getByName("192.168.3.126");
-        } catch (SocketException e) {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
-        } catch (UnknownHostException e) {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
-        }
         avcCodec.setCallback(new AvcEncoder.Callback() {
             @Override
             public void onOutputBufferAvailable(byte[] data) {

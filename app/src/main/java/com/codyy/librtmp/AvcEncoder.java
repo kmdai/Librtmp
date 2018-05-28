@@ -10,17 +10,10 @@ import android.os.Message;
 import android.text.TextUtils;
 import android.util.Log;
 import android.view.Surface;
-import android.widget.TextView;
 
-import com.kmdai.rtmppush.LibrtmpManager;
 import com.kmdai.srslibrtmp.SRSLibrtmpManager;
 
 import java.io.IOException;
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
-import java.net.InetAddress;
-import java.net.SocketException;
-import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 
 
@@ -31,25 +24,21 @@ public class AvcEncoder {
     int m_height;
     byte[] m_info = null;
     private Surface mSurface;
-    DatagramSocket mSocket;
-    InetAddress mInetAddress;
     private Callback mCallback;
     ByteBuffer mByteBuffer;
     private final int TIMEOUT_US = 10000;
     boolean mIsStop;
     //    private LibrtmpManager mLibrtmpManager;
-    private int mTimeStamp;
     //                RTMPMuxer mRTMPMuxer;
     private HandlerThread mHandlerThread;
     private Handler mHandler;
     long indexTime = 0;
     private SRSLibrtmpManager mSRSLibrtmpManager;
 
-    public AvcEncoder(int width, int height, final int framerate, int bitrate) {
+    public AvcEncoder(int width, int height, float framerate, int bitrate) {
         mIsStop = false;
         m_width = width;
         m_height = height;
-        mTimeStamp = 1000 / framerate;
         mSRSLibrtmpManager = new SRSLibrtmpManager();
 //        mLibrtmpManager = new LibrtmpManager();
 //        mLibrtmpManager.rtmpInit();
@@ -65,16 +54,6 @@ public class AvcEncoder {
 //        mRTMPMuxer = new RTMPMuxer();
 //        mRTMPMuxer.open("rtmp://10.5.225.38:1935/srs/kmdai", width, height);
 //       mRTMPMuxer.write_flv_header(false,true);
-        try {
-            mSocket = new DatagramSocket();
-            mInetAddress = InetAddress.getByName("192.168.3.126");
-        } catch (SocketException e) {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
-        } catch (UnknownHostException e) {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
-        }
         mHandlerThread = new HandlerThread("sendframe");
         mHandlerThread.start();
         mHandler = new Handler(mHandlerThread.getLooper(), new Handler.Callback() {
@@ -111,7 +90,7 @@ public class AvcEncoder {
         });
         MediaFormat mediaFormat = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, width, height);
         mediaFormat.setInteger(MediaFormat.KEY_BIT_RATE, bitrate);
-        mediaFormat.setInteger(MediaFormat.KEY_FRAME_RATE, framerate);
+        mediaFormat.setFloat(MediaFormat.KEY_FRAME_RATE, framerate);
         mediaFormat.setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AVCProfileMain);
         mediaFormat.setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface);
         mediaFormat.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1);
@@ -311,14 +290,6 @@ public class AvcEncoder {
         }
     }
 
-    public void send(byte[] data) {
-        DatagramPacket packet = new DatagramPacket(data, data.length, mInetAddress, 5000);
-        try {
-            mSocket.send(packet);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
 
     private long lastTimeUs;
     private int timeIndex;
