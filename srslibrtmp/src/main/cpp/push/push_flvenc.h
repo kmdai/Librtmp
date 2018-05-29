@@ -20,13 +20,24 @@
  * @param audiosamplerate 音频采样率
  * @param audiosamplesize  采样大小
  * @param stereo 立体声
- * @return
+ * @return mateDateSize
  */
 int
-create_MetaData(char *data, double framerate, double videodatarate, double videocodecid,
+create_MetaData(char **data, double framerate, double videodatarate, double videocodecid,
                 double width,
                 double height,
                 double audiocodecid, double audiodatarate, double audiosamplerate,
                 double audiosamplesize, int stereo);
+
+int create_AVCVideoPacket(char **data,char* sps_pps,int size);
+
+///**
+// *
+// * @param sps
+// * @param pps
+// * @param size
+// * @return
+// */
+//int create_AVCVideoPacket(char **body, char *sps, char *pps, uint32_t spsLen, uint32_t ppsLen);
 
 #endif //LIBRTMP_PUSH_FLVENC_H

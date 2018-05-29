@@ -4,11 +4,14 @@
 
 #include <jni.h>
 #include "push_rtmp.h"
+#include "push_flvenc.h"
 
 srs_rtmp_t srs_rtmp;
+media_config *media_config_p;
 
 int init_srs(const char *url) {
     srs_rtmp = srs_rtmp_create(url);
+    media_config_p = (media_config *) malloc(sizeof(media_config));
     init_queue();
     if (srs_rtmp_handshake(srs_rtmp) != 0) {
         rtmp_destroy();
@@ -29,6 +32,7 @@ int init_srs(const char *url) {
 }
 
 void rtmp_destroy() {
+    free(media_config_p);
     cancel_queue();
     //销毁队列
     destroy_queue();
@@ -60,6 +64,27 @@ void *push_data(void *gVm) {
             return (void *) 1;
         }
 //        SRS_LOGE("push rtmp frame-%d", node_p->size);
+        //sps、pps
+        if (node_p->type == NODE_FLAG_CODEC_CONFIG) {
+            if (media_config_p) {
+                char *meta;
+                int metaSize = create_MetaData(&meta,
+                                               media_config_p->framerate,
+                                               media_config_p->videodatarate,
+                                               7,
+                                               media_config_p->width,
+                                               media_config_p->height,
+                                               0,
+                                               media_config_p->audiodatarate,
+                                               media_config_p->audiosamplerate,
+                                               media_config_p->audiosamplesize,
+                                               1);
+                srs_rtmp_write_packet(srs_rtmp, SRS_RTMP_TYPE_SCRIPT, node_p->time, meta, metaSize);
+            }
+            char *data;
+            int size = create_AVCVideoPacket(&data, node_p->data, node_p->size);
+            srs_rtmp_write_packet(srs_rtmp, SRS_RTMP_TYPE_VIDEO, node_p->time, data, size);
+        }
         write_raw_frames(node_p->data, node_p->size, node_p->time, node_p->time);
         free(node_p);
     }

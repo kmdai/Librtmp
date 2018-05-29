@@ -5,6 +5,7 @@
 #include "push_flvenc.h"
 #include <string.h>
 #include <memory.h>
+#include <malloc.h>
 // AMF0 marker
 #define RTMP_AMF0_Number                     0x00
 #define RTMP_AMF0_Boolean                     0x01
@@ -46,6 +47,14 @@ char *put_24byte(char *out, uint32_t val) {
     return out + 3;
 }
 
+char *put_32byte(char *out, uint32_t val) {
+    out[3] = (char) (val & 0xff);
+    out[2] = (char) (val >> 8);
+    out[1] = (char) (val >> 16);
+    out[0] = (char) (val >> 24);
+    return out + 4;
+}
+
 char *put_string(char *out, char *string) {
     int len = (int) strlen(string);
     out = put_16byte(out, len);
@@ -68,14 +77,108 @@ char *put_64byte(char *c, double d) {
     return c + 8;
 }
 
-int create_MetaData(char *data, double framerate, double videodatarate, double videocodecid,
+int find_sps_pps_pos(char *data, int size, int offset, int **prefix) {
+    int pos = offset;
+    while (pos < size) {
+        if (data[pos++] == 0x00 && data[pos++] == 0x00) {
+            if (data[pos++] == 0x01) {
+                **prefix = 3;
+                return pos;
+            } else {
+                //计数回退
+                pos--;
+                if (data[pos++] == 0x00 && data[pos++] == 0x01) {
+                    **prefix = 4;
+                    return pos;
+                }
+            }
+        }
+    }
+    return pos;
+}
+
+int create_MetaData(char **data, double framerate, double videodatarate, double videocodecid,
                     double width,
                     double height, double audiocodecid, double audiodatarate,
                     double audiosamplerate, double audiosamplesize, int stereo) {
-    char out = data;
+    char *out = *data;
     out = put_16byte(out, RTMP_AMF0_String);
     out = put_string(out, "onMetaData");
+    out = put_16byte(out, 8);
+    out = put_32byte(out, 10);
+    //编码方式
+    out = put_string(out, "videocodecid");
+    out = put_64byte(out, videocodecid);
+    out = put_string(out, "framerate");
+    out = put_64byte(out, framerate);
+    out = put_string(out, "videodatarate");
+    out = put_64byte(out, videodatarate);
+    out = put_string(out, "width");
+    out = put_64byte(out, width);
+    out = put_string(out, "height");
+    out = put_64byte(out, height);
+    out = put_string(out, "audiocodecid");
+    out = put_64byte(out, audiocodecid);
+    out = put_string(out, "audiodatarate");
+    out = put_64byte(out, audiodatarate);
+    out = put_string(out, "audiosamplerate");
+    out = put_64byte(out, audiosamplerate);
+    out = put_string(out, "audiosamplesize");
+    out = put_64byte(out, audiosamplesize);
+    out = put_string(out, "stereo");
+    out = put_byte(out, stereo);
+    out = put_24byte(out, RTMP_AMF0_ObjectEnd);
+    return (int) (out - *data);
+}
 
-    out = put_string(out, "hasVideo");
-    return 0;
+int create_AVCVideoPacket(char **data, char *sps_pps, int size) {
+    int spsS;
+    int ppsS;
+    int *prefix;
+    spsS = find_sps_pps_pos(sps_pps, size, 0, &prefix);
+    ppsS = find_sps_pps_pos(sps_pps, size, spsS, &prefix);
+    int spsLen = ppsS - spsS - *prefix;
+    int ppsLen = size - ppsS;
+    char *sps = (char *) malloc(spsLen);
+    memcpy(sps, &sps_pps[*prefix], spsLen);
+    char *pps = (char *) malloc(ppsLen);
+    memcpy(pps, &sps_pps[ppsS], ppsLen);
+    return create_AVCVideoData(data, sps, pps, spsLen, ppsLen);
+}
+
+int create_AVCVideoData(char **data, char *sps, char *pps, uint32_t spsLen, uint32_t ppsLen) {
+    *data = (char *) malloc(spsLen + ppsLen + 16);
+    char *body = *data;
+    int i = 0;
+    body[i++] = 0x17;
+    body[i++] = 0x00;
+
+    body[i++] = 0x00;
+    body[i++] = 0x00;
+    body[i++] = 0x00;
+
+    body[i++] = 0x01;
+    body[i++] = sps[1];
+    body[i++] = sps[2];
+    body[i++] = sps[3];
+    body[i++] = (char) 0xff;
+
+    /*sps*/
+    body[i++] = 0xe1;
+    body[i++] = (spsLen >> 8) & 0xff;
+    body[i++] = spsLen & 0xff;
+
+    memcpy(&body[i], sps, spsLen);
+
+    i += spsLen;
+
+    /*pps*/
+    body[i++] = 0x01;
+    body[i++] = (ppsLen >> 8) & 0xff;
+    body[i++] = ppsLen & 0xff;
+    memcpy(&body[i], pps, ppsLen);
+
+    i += ppsLen;
+
+    return i;
 }

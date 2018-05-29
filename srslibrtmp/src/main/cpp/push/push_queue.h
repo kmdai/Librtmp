@@ -12,7 +12,19 @@
 #include <pthread.h>
 
 #define QUEUW_LENGTH 50
+/**
+ * sps\pps
+ */
+#define NODE_FLAG_CODEC_CONFIG 2
+/**
+ * 关键帧
+ */
+#define NODE_FLAG_KEY_FRAME 1
 
+/**
+ *p帧
+ */
+#define NODE_FLAG_PARTIAL_FRAME 8
 typedef struct node {
     //数据
     char *data;

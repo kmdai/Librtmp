@@ -13,6 +13,15 @@
 
 #define SRS_LOGE(...) ((void)__android_log_print(ANDROID_LOG_ERROR, "push", __VA_ARGS__))
 
+typedef struct mediaConfig {
+    int framerate;
+    int videodatarate;
+    int width;
+    int height;
+    int audiodatarate;
+    int audiosamplerate;
+    int audiosamplesize;
+} media_config;
 
 int init_srs(const char *url);
 
