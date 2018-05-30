@@ -3,6 +3,7 @@
 //
 
 #include "push_flvenc.h"
+#include "push_rtmp.h"
 #include <string.h>
 #include <memory.h>
 #include <malloc.h>
@@ -35,8 +36,8 @@ char *put_byte(char *out, uint8_t val) {
 }
 
 char *put_16byte(char *out, uint16_t val) {
-    out[1] = (char) (val & 0xFF);
-    out[0] = (char) (val >> 8);
+    out[1] = val & 0xFF;
+    out[0] = val >> 8;
     return out + 2;
 }
 
@@ -97,55 +98,6 @@ int find_sps_pps_pos(char *data, int size, int offset, int **prefix) {
     return pos;
 }
 
-int create_MetaData(char **data, double framerate, double videodatarate, double videocodecid,
-                    double width,
-                    double height, double audiocodecid, double audiodatarate,
-                    double audiosamplerate, double audiosamplesize, int stereo) {
-    char *out = *data;
-    out = put_16byte(out, RTMP_AMF0_String);
-    out = put_string(out, "onMetaData");
-    out = put_16byte(out, 8);
-    out = put_32byte(out, 10);
-    //编码方式
-    out = put_string(out, "videocodecid");
-    out = put_64byte(out, videocodecid);
-    out = put_string(out, "framerate");
-    out = put_64byte(out, framerate);
-    out = put_string(out, "videodatarate");
-    out = put_64byte(out, videodatarate);
-    out = put_string(out, "width");
-    out = put_64byte(out, width);
-    out = put_string(out, "height");
-    out = put_64byte(out, height);
-    out = put_string(out, "audiocodecid");
-    out = put_64byte(out, audiocodecid);
-    out = put_string(out, "audiodatarate");
-    out = put_64byte(out, audiodatarate);
-    out = put_string(out, "audiosamplerate");
-    out = put_64byte(out, audiosamplerate);
-    out = put_string(out, "audiosamplesize");
-    out = put_64byte(out, audiosamplesize);
-    out = put_string(out, "stereo");
-    out = put_byte(out, stereo);
-    out = put_24byte(out, RTMP_AMF0_ObjectEnd);
-    return (int) (out - *data);
-}
-
-int create_AVCVideoPacket(char **data, char *sps_pps, int size) {
-    int spsS;
-    int ppsS;
-    int *prefix;
-    spsS = find_sps_pps_pos(sps_pps, size, 0, &prefix);
-    ppsS = find_sps_pps_pos(sps_pps, size, spsS, &prefix);
-    int spsLen = ppsS - spsS - *prefix;
-    int ppsLen = size - ppsS;
-    char *sps = (char *) malloc(spsLen);
-    memcpy(sps, &sps_pps[*prefix], spsLen);
-    char *pps = (char *) malloc(ppsLen);
-    memcpy(pps, &sps_pps[ppsS], ppsLen);
-    return create_AVCVideoData(data, sps, pps, spsLen, ppsLen);
-}
-
 int create_AVCVideoData(char **data, char *sps, char *pps, uint32_t spsLen, uint32_t ppsLen) {
     *data = (char *) malloc(spsLen + ppsLen + 16);
     char *body = *data;
@@ -180,5 +132,95 @@ int create_AVCVideoData(char **data, char *sps, char *pps, uint32_t spsLen, uint
 
     i += ppsLen;
 
+    return i;
+}
+
+int create_MetaData(char **data, double framerate, double videodatarate, double videocodecid,
+                    double width,
+                    double height, double audiocodecid, double audiodatarate,
+                    double audiosamplerate, double audiosamplesize, int stereo) {
+    SRS_LOGE("---create_MetaData");
+    char *out = (char *) malloc(512);
+    char *start = out;
+//    char *out = *data;
+    out = put_16byte(out, RTMP_AMF0_String);
+    out = put_string(out, "onMetaData");
+    out = put_16byte(out, 8);
+    out = put_32byte(out, 10);
+    //编码方式
+    out = put_string(out, "videocodecid");
+    out = put_64byte(out, videocodecid);
+    out = put_string(out, "framerate");
+    out = put_64byte(out, framerate);
+    out = put_string(out, "videodatarate");
+    out = put_64byte(out, videodatarate);
+    out = put_string(out, "width");
+    out = put_64byte(out, width);
+    out = put_string(out, "height");
+    out = put_64byte(out, height);
+    out = put_string(out, "audiocodecid");
+    out = put_64byte(out, audiocodecid);
+    out = put_string(out, "audiodatarate");
+    out = put_64byte(out, audiodatarate);
+    out = put_string(out, "audiosamplerate");
+    out = put_64byte(out, audiosamplerate);
+    out = put_string(out, "audiosamplesize");
+    out = put_64byte(out, audiosamplesize);
+    out = put_string(out, "stereo");
+    out = put_byte(out, stereo);
+    out = put_24byte(out, RTMP_AMF0_ObjectEnd);
+    int size = (int) (out - start);
+    *data = (char *) malloc(size);
+    memcpy(*data, start, size);
+    free(start);
+    return size;
+}
+
+int create_AVCVideoPacket(char **data, char *sps_pps, int size) {
+    int spsS;
+    int ppsS;
+    int *prefix;
+    spsS = find_sps_pps_pos(sps_pps, size, 0, &prefix);
+    ppsS = find_sps_pps_pos(sps_pps, size, spsS, &prefix);
+    int spsLen = ppsS - spsS - *prefix;
+    int ppsLen = size - ppsS;
+    char *sps = (char *) malloc(spsLen);
+    SRS_LOGE("---prefix=%d,spsLen=%d,ppsLen=%d", *prefix, spsLen, ppsLen);
+    memcpy(sps, &sps_pps[*prefix], spsLen);
+    char *pps = (char *) malloc(ppsLen);
+    memcpy(pps, &sps_pps[ppsS], ppsLen);
+    int AVCSize = create_AVCVideoData(data, sps, pps, spsLen, ppsLen);
+    free(sps);
+    free(pps);
+    return AVCSize;
+}
+
+int create_VideoPacket(char **data, char *nalu, int type, int size, int time) {
+    SRS_LOGE("---create_VideoPacket");
+    *data = (char *) malloc(size - 4 + 9);
+    char *body = *data;
+    int i = 0;
+    //默认是非关键帧(2:Pframe  7:AVC)
+    body[i++] = 0x27;
+    body[i++] = 0x01;
+
+    body[i++] = 0x00;
+    body[i++] = 0x00;
+    body[i++] = 0x00;
+
+    if (type == 1) {
+        body[0] = 0x17;
+    }
+    body[i++] = (size >> 24) & 0xff;
+    body[i++] = (size >> 16) & 0xff;
+    body[i++] = (size >> 8) & 0xff;
+    body[i++] = size & 0xff;
+
+    if (type == 1) {
+        //关键帧1:Iframe  7:AVC
+        body[0] = 0x17;
+    }
+    memcpy(&body[i], &nalu[4], size);
+    i += size;
     return i;
 }

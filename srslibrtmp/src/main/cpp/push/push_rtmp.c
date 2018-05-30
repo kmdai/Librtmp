@@ -74,7 +74,7 @@ void *push_data(void *gVm) {
                                                7,
                                                media_config_p->width,
                                                media_config_p->height,
-                                               0,
+                                               10,
                                                media_config_p->audiodatarate,
                                                media_config_p->audiosamplerate,
                                                media_config_p->audiosamplesize,
@@ -84,8 +84,13 @@ void *push_data(void *gVm) {
             char *data;
             int size = create_AVCVideoPacket(&data, node_p->data, node_p->size);
             srs_rtmp_write_packet(srs_rtmp, SRS_RTMP_TYPE_VIDEO, node_p->time, data, size);
+            free(data);
+        } else {
+            char *data;
+            int size = create_VideoPacket(&data, node_p->data, node_p->type, node_p->size, 0);
+            srs_rtmp_write_packet(srs_rtmp, SRS_RTMP_TYPE_VIDEO, node_p->time, data, size);
+            free(data);
         }
-        write_raw_frames(node_p->data, node_p->size, node_p->time, node_p->time);
         free(node_p);
     }
 }
@@ -94,3 +99,47 @@ void rtmp_start(JavaVM *gVm) {
     pthread_t pthread;
     int result = pthread_create(&pthread, NULL, push_data, gVm);
 }
+
+void set_framerate(double framerate) {
+    if (media_config_p) {
+        media_config_p->framerate = framerate;
+    }
+}
+
+void set_videodatarate(double videodatarate) {
+    if (media_config_p) {
+        media_config_p->videodatarate = videodatarate;
+    }
+}
+
+void set_width(double width) {
+    if (media_config_p) {
+        media_config_p->width = width;
+    }
+}
+
+void set_height(double height) {
+    if (media_config_p) {
+        media_config_p->height = height;
+    }
+}
+
+void set_audiodatarate(double audiodatarate) {
+    if (media_config_p) {
+        media_config_p->audiodatarate = audiodatarate;
+    }
+}
+
+void set_audiosamplerate(double audiosamplerate) {
+    if (media_config_p) {
+        media_config_p->audiosamplerate = audiosamplerate;
+    }
+}
+
+void set_audiosamplesize(double audiosamplesize) {
+    if (media_config_p) {
+        media_config_p->audiosamplesize = audiosamplesize;
+    }
+}
+
+

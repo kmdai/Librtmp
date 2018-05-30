@@ -29,15 +29,15 @@ create_MetaData(char **data, double framerate, double videodatarate, double vide
                 double audiocodecid, double audiodatarate, double audiosamplerate,
                 double audiosamplesize, int stereo);
 
-int create_AVCVideoPacket(char **data,char* sps_pps,int size);
+/**
+ *
+ * @param data
+ * @param sps_pps
+ * @param size
+ * @return
+ */
+int create_AVCVideoPacket(char **data, char *sps_pps, int size);
 
-///**
-// *
-// * @param sps
-// * @param pps
-// * @param size
-// * @return
-// */
-//int create_AVCVideoPacket(char **body, char *sps, char *pps, uint32_t spsLen, uint32_t ppsLen);
+int create_VideoPacket(char **data,char *nalu,int type, int size, int time);
 
 #endif //LIBRTMP_PUSH_FLVENC_H

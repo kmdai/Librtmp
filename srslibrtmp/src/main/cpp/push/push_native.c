@@ -29,13 +29,48 @@ void release(JNIEnv *env, jobject instance) {
     rtmp_destroy();
 }
 
+void setFrameRate(JNIEnv *env, jobject instance, jdouble framerate) {
+    set_framerate(framerate);
+}
+
+void setVideodatarate(JNIEnv *env, jobject instance, jdouble videodatarate) {
+    set_videodatarate(videodatarate);
+}
+
+void setWidth(JNIEnv *env, jobject instance, jdouble width) {
+    set_width(width);
+}
+
+void setHeight(JNIEnv *env, jobject instance, jdouble height) {
+    set_height(height);
+}
+
+void setAudiodatarate(JNIEnv *env, jobject instance, jdouble audiodatarate) {
+    set_audiodatarate(audiodatarate);
+}
+
+void setAudiosamplerate(JNIEnv *env, jobject instance, jdouble audiosamplerate) {
+    set_audiosamplerate(audiosamplerate);
+}
+
+void setAudiosamplesize(JNIEnv *env, jobject instance, jdouble audiosamplesize) {
+    set_audiosamplesize(audiosamplesize);
+}
+
 /**
  * 本地函数
  */
 const JNINativeMethod srs_methods[] = {
-        {"setUrl",   "(Ljava/lang/String;)Z", (void *) setUrl},
-        {"release",  "()V",                   (void *) release},
-        {"addFrame", "([BIII)V",              (void *) addFrame}
+        {"setUrl",             "(Ljava/lang/String;)Z", (void *) setUrl},
+        {"release",            "()V",                   (void *) release},
+        {"addFrame",           "([BIII)V",              (void *) addFrame},
+        {"setFrameRate",       "(D)V",                  (void *) setFrameRate},
+        {"setVideodatarate",   "(D)V",                  (void *) setVideodatarate},
+        {"setWidth",           "(D)V",                  (void *) setWidth},
+        {"setHeight",          "(D)V",                  (void *) setHeight},
+        {"setAudiodatarate",   "(D)V",                  (void *) setAudiodatarate},
+        {"setAudiosamplerate", "(D)V",                  (void *) setAudiosamplerate},
+        {"setAudiosamplesize", "(D)V",                  (void *) setAudiosamplesize}
 };
 /**
  * 动态注册本地函数
@@ -50,6 +85,7 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
         SRS_LOGE("Env not got");
         return JNI_ERR;
     }
+
     jclass clz = (*jenv)->FindClass(jenv, JNI_CLS_MANAGER);
     if (clz == NULL) {
         SRS_LOGE("JNI_OnLoad:Class %s not found", JNI_CLS_MANAGER);

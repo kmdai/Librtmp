@@ -14,13 +14,13 @@
 #define SRS_LOGE(...) ((void)__android_log_print(ANDROID_LOG_ERROR, "push", __VA_ARGS__))
 
 typedef struct mediaConfig {
-    int framerate;
-    int videodatarate;
-    int width;
-    int height;
-    int audiodatarate;
-    int audiosamplerate;
-    int audiosamplesize;
+    double framerate;
+    double videodatarate;
+    double width;
+    double height;
+    double audiodatarate;
+    double audiosamplerate;
+    double audiosamplesize;
 } media_config;
 
 int init_srs(const char *url);
@@ -35,4 +35,11 @@ void rtmp_start(JavaVM *gVm);
 
 void rtmp_destroy();
 
+void set_framerate(double framerate);
+void set_videodatarate(double videodatarate);
+void set_width(double width);
+void set_height(double height);
+void set_audiodatarate(double audiodatarate);
+void set_audiosamplerate(double audiosamplerate);
+void set_audiosamplesize(double audiosamplesize);
 #endif //LIBRTMP_PUSH_RTMP_H

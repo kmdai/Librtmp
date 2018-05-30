@@ -15,4 +15,18 @@ public class SRSLibrtmpManager {
     public native void addFrame(byte[] data, int size, int type, int time);
 
     public native void release();
+
+    public native void setFrameRate(double frameRate);
+
+    public native void setVideodatarate(double videodatarate);
+
+    public native void setWidth(double width);
+
+    public native void setHeight(double height);
+
+    public native void setAudiodatarate(double audiodatarate);
+
+    public native void setAudiosamplerate(double audiosamplerate);
+
+    public native void setAudiosamplesize(double audiosamplesize);
 }
