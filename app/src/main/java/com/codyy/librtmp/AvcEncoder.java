@@ -266,7 +266,7 @@ public class AvcEncoder {
                     byte[] outData = new byte[bufferInfo.size];
                     outputBuffer.get(outData, 0, bufferInfo.size);
                     calcTotalTime(bufferInfo.presentationTimeUs / 1000);
-                    Log.d("----","offset--"+bufferInfo.offset);
+//                    Log.d("----","offset--"+bufferInfo.offset);
                     if (bufferInfo.flags == MediaCodec.BUFFER_FLAG_CODEC_CONFIG) {
                         mSRSLibrtmpManager.addFrame(outData, outData.length, bufferInfo.flags, 0);
                     } else {
