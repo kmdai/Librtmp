@@ -65,7 +65,7 @@ char *put_string(char *out, char *string) {
 }
 
 char *put_64byte(char *c, double d) {
-    *c++ = RTMP_AMF0_Number;
+    c = put_byte(c, RTMP_AMF0_Number);
     {
         unsigned char *ci, *co;
         ci = (unsigned char *) &d;
@@ -126,7 +126,7 @@ int create_AVCVideoData(char **data, char *sps, char *pps, int spsLen, int ppsLe
     body[i++] = (char) (spsLen >> 8);
     body[i++] = (char) (spsLen & 0xff);
 
-    memcpy(&body[i], sps, spsLen);
+    memcpy(body + i, sps, spsLen);
 
     i += spsLen;
 
@@ -134,7 +134,7 @@ int create_AVCVideoData(char **data, char *sps, char *pps, int spsLen, int ppsLe
     body[i++] = 0x01;
     body[i++] = (char) (ppsLen >> 8);
     body[i++] = (char) (ppsLen & 0xff);
-    memcpy(&body[i], pps, ppsLen);
+    memcpy(body + i, pps, ppsLen);
 
     i += ppsLen;
 
@@ -145,9 +145,9 @@ int create_MetaData(char **data, double framerate, double videodatarate, double 
                     double width,
                     double height, double audiocodecid, double audiodatarate,
                     double audiosamplerate, double audiosamplesize, int stereo) {
-    char start[256] = {0};
-    char *out = (char *) &start;
-//    char *out = *data;
+    char *start = (char *) malloc(256);
+    memset(start, 0, 256);
+    char *out = start;
     out = put_byte(out, 2);
     out = put_string(out, "onMetaData");
     out = put_byte(out, 8);
@@ -174,7 +174,7 @@ int create_MetaData(char **data, double framerate, double videodatarate, double 
     out = put_string(out, "stereo");
     out = put_byte(out, RTMP_AMF0_Boolean);
     out = put_byte(out, stereo);
-    out = put_16byte(out, 0);
+    out = put_16byte(out, 0x00);
     out = put_byte(out, RTMP_AMF0_ObjectEnd);
     int size = (int) (out - start);
 
@@ -182,7 +182,7 @@ int create_MetaData(char **data, double framerate, double videodatarate, double 
 
     memcpy(*data, start, size);
     SRS_LOGE("---create_MetaData:size=%d", size);
-//    free(start);
+    free(start);
     return size;
 }
 
@@ -229,7 +229,7 @@ int create_VideoPacket(char **data, char *nalu, int type, int size, int time) {
     body[i++] = (char) (size & 0xff);
 
 
-    memcpy(&body[i], nalu + prefix, nalu_size);
+    memcpy(body + i, nalu + prefix, nalu_size);
     i += nalu_size;
 //    SRS_LOGE("---create_VideoPacket size=%d", i);
     return i;

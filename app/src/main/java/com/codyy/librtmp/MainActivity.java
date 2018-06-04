@@ -39,32 +39,19 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-
-
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        avcCodec = new AvcEncoder(width, height, framerate, bitrate);
         DisplayMetrics metrics = new DisplayMetrics();
         getWindowManager().getDefaultDisplay().getMetrics(metrics);
         mScreenDensity = metrics.densityDpi;
-        mProjectionManager =
-                (MediaProjectionManager) getSystemService(Context.MEDIA_PROJECTION_SERVICE);
-        avcCodec.setCallback(new AvcEncoder.Callback() {
-            @Override
-            public void onOutputBufferAvailable(byte[] data) {
-//                DatagramPacket packet = new DatagramPacket(data, data.length, mInetAddress, 5000);
-//                try {
-////                    mSocket.send(packet);
-//                } catch (IOException e) {
-//                    e.printStackTrace();
-//                }
-            }
-        });
     }
 
 
     private void shareScreen() {
         if (mMediaProjection == null) {
+            mProjectionManager =
+                    (MediaProjectionManager) getSystemService(Context.MEDIA_PROJECTION_SERVICE);
+            avcCodec = new AvcEncoder(width, height, framerate, bitrate);
             startActivityForResult(mProjectionManager.createScreenCaptureIntent(),
                     PERMISSION_CODE);
             return;
@@ -106,7 +93,6 @@ public class MainActivity extends Activity {
     private class MediaProjectionCallback extends MediaProjection.Callback {
         @Override
         public void onStop() {
-            mMediaProjection = null;
             stopScreenSharing();
         }
     }
@@ -115,6 +101,7 @@ public class MainActivity extends Activity {
         if (mVirtualDisplay != null) {
             mVirtualDisplay.release();
             mMediaProjection.stop();
+            mMediaProjection = null;
             mVirtualDisplay = null;
             avcCodec.close();
         }
