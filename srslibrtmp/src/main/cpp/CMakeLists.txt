@@ -84,7 +84,7 @@ else()
     add_definitions(-D__arm__)
 endif()
 
-add_definitions(-DSRS_DISABLE_LOG)
+#add_definitions(-DSRS_DISABLE_LOG)
 
 set(srs-librtmp
    ${core}
@@ -93,7 +93,8 @@ set(srs-librtmp
    ${protocol})
 
 add_library(srsrtmp STATIC ${srs-librtmp})
-
+find_library(lib-log log)
+target_link_libraries(srsrtmp  ${lib-log})
 set(push
     push/push_rtmp.c
     push/push_rtmp.h
@@ -104,5 +105,4 @@ set(push
     push/push_flvenc.c)
 
 add_library(srsPush SHARED ${push})
-find_library(lib-log log)
-target_link_libraries(srsPush srsrtmp ${lib-log})
+target_link_libraries(srsPush srsrtmp )

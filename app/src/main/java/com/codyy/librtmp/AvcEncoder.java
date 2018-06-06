@@ -12,6 +12,7 @@ import android.text.TextUtils;
 import android.util.Log;
 import android.view.Surface;
 
+import com.kmdai.rtmppush.LibrtmpManager;
 import com.kmdai.srslibrtmp.SRSLibrtmpManager;
 
 import java.io.IOException;
@@ -30,7 +31,9 @@ public class AvcEncoder {
     ByteBuffer mByteBuffer;
     private final int TIMEOUT_US = 10000;
     boolean mIsStop;
-    //    private LibrtmpManager mLibrtmpManager;
+    private LibrtmpManager mLibrtmpManager;
+//    private String mRtmpUrl = "rtmp://172.96.16.188:1935/srs/kmdai";
+    private String mRtmpUrl = "rtmp://10.5.225.38:1935/srs/kmdai";
     //                RTMPMuxer mRTMPMuxer;
     long indexTime = 0;
     private SRSLibrtmpManager mSRSLibrtmpManager;
@@ -42,6 +45,7 @@ public class AvcEncoder {
         mFrameRate = framerate;
         mBitrate = bitrate;
         mSRSLibrtmpManager = new SRSLibrtmpManager();
+        mLibrtmpManager = new LibrtmpManager();
         reset();
         MediaFormat mediaFormat = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, width, height);
         mediaFormat.setInteger(MediaFormat.KEY_BIT_RATE, bitrate);
@@ -93,17 +97,20 @@ public class AvcEncoder {
 
         @Override
         public void run() {
-            if (!mSRSLibrtmpManager.setUrl("rtmp://10.5.225.38:1935/srs/kmdai")) {
-                return;
-            }
-            mSRSLibrtmpManager.setFrameRate(mFrameRate);
-            mSRSLibrtmpManager.setHeight(m_height);
-            mSRSLibrtmpManager.setWidth(m_width);
-            mSRSLibrtmpManager.setVideodatarate(mBitrate);
-            mSRSLibrtmpManager.setAudiodatarate(29);
-            mSRSLibrtmpManager.setAudiosamplerate(44100);
-            mSRSLibrtmpManager.setAudiosamplesize(16);
+            mLibrtmpManager.rtmpInit();
+            mLibrtmpManager.setUrl(mRtmpUrl);
+//            if (!mSRSLibrtmpManager.setUrl(mRtmpUrl)) {
+//                return;
+//            }
+//            mSRSLibrtmpManager.setFrameRate(mFrameRate);
+//            mSRSLibrtmpManager.setHeight(m_height);
+//            mSRSLibrtmpManager.setWidth(m_width);
+//            mSRSLibrtmpManager.setVideodatarate(mBitrate);
+//            mSRSLibrtmpManager.setAudiodatarate(29);
+//            mSRSLibrtmpManager.setAudiosamplerate(44100);
+//            mSRSLibrtmpManager.setAudiosamplesize(16);
             MediaCodec.BufferInfo bufferInfo = new MediaCodec.BufferInfo();
+            int time = 0;
             for (; ; ) {
                 if (mIsStop) {
                     break;
@@ -116,24 +123,16 @@ public class AvcEncoder {
                     calcTotalTime(bufferInfo.presentationTimeUs / 1000);
 //                    Log.d("----","offset--"+bufferInfo.offset);
                     if (bufferInfo.flags == MediaCodec.BUFFER_FLAG_CODEC_CONFIG) {
-                        mSRSLibrtmpManager.addFrame(outData, outData.length, bufferInfo.flags, 0);
+//                        mSRSLibrtmpManager.addFrame(outData, outData.length, bufferInfo.flags, 0);
+                        mLibrtmpManager.setSpsPps(outData, outData.length);
                     } else {
-                        mSRSLibrtmpManager.addFrame(outData, outData.length, bufferInfo.flags, getTimeIndex());
+//                        Log.d("----", "getTimeIndex()--" + getTimeIndex());
+                        mLibrtmpManager.sendChunk(outData, outData.length, bufferInfo.flags, getTimeIndex());
+//                        time+=30;
+//                        mSRSLibrtmpManager.addFrame(outData, outData.length, bufferInfo.flags, getTimeIndex());
                     }
-
-//                    try {
-//                        mRtmpClient.write(outData);
-//                    } catch (IOException e) {
-//                        e.printStackTrace();
-//                    }
-//                    Message message = mHandler.obtainMessage();
-//                    message.obj = new Frame(outData, bufferInfo.size, bufferInfo.flags, bufferInfo.flags == MediaCodec.BUFFER_FLAG_KEY_FRAME);
-//                    mHandler.sendMessage(message);
-                }
-                if (outputBufferId >= 0 && bufferInfo.flags == MediaCodec.BUFFER_FLAG_CODEC_CONFIG) {
                 }
                 if (outputBufferId >= 0) {
-
                     mMediaCodec.releaseOutputBuffer(outputBufferId, false);
                 }
             }
@@ -141,8 +140,9 @@ public class AvcEncoder {
                 mMediaCodec.stop();
                 mMediaCodec.release();
                 Log.d("---", ":release");
-                mSRSLibrtmpManager.release();
-//                mLibrtmpManager.rtmpFree();
+//                mSRSLibrtmpManager.release();
+                reset();
+                mLibrtmpManager.rtmpFree();
 //                mRTMPMuxer.close();
             } catch (Exception e) {
                 e.printStackTrace();
@@ -158,9 +158,7 @@ public class AvcEncoder {
         if (lastTimeUs <= 0) {
             this.lastTimeUs = currentTimeUs;
         }
-        int delta = (int) (currentTimeUs - lastTimeUs);
-//        this.lastTimeUs = currentTimeUs;
-        timeIndex = delta;
+        timeIndex = (int) (currentTimeUs - lastTimeUs);
     }
 
     public void reset() {

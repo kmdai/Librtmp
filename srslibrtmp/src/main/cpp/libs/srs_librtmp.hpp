@@ -63,7 +63,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #endif
 
 #include <sys/types.h>
-
+#include <android/log.h>
 #ifdef __cplusplus
 extern "C"{
 #endif
@@ -88,7 +88,7 @@ extern int srs_version_revision();
 // the RTMP handler.
 typedef void* srs_rtmp_t;
 typedef void* srs_amf0_t;
-    
+
 /**
  * create/destroy a rtmp protocol stack.
  * @url rtmp url, for example:
@@ -166,7 +166,7 @@ extern int srs_rtmp_do_complex_handshake(srs_rtmp_t rtmp);
 * @remark, all params can be NULL to ignore.
 * @remark, user should never free the args for we directly use it.
 */
-extern int srs_rtmp_set_connect_args(srs_rtmp_t rtmp, 
+extern int srs_rtmp_set_connect_args(srs_rtmp_t rtmp,
     const char* tcUrl, const char* swfUrl, const char* pageUrl, srs_amf0_t args
 );
 
@@ -195,8 +195,8 @@ extern int srs_rtmp_connect_app(srs_rtmp_t rtmp);
 * @return 0, success; otherswise, failed.
 */
 extern int srs_rtmp_connect_app2(srs_rtmp_t rtmp,
-    char srs_server_ip[128], char srs_server[128], 
-    char srs_primary[128], char srs_authors[128], 
+    char srs_server_ip[128], char srs_server[128],
+    char srs_primary[128], char srs_authors[128],
     char srs_version[32], int* srs_id, int* srs_pid
 );
 
@@ -233,8 +233,8 @@ extern int srs_rtmp_publish_stream(srs_rtmp_t rtmp);
 *
 * @return 0, success; otherswise, failed.
 */
-extern int srs_rtmp_bandwidth_check(srs_rtmp_t rtmp, 
-    int64_t* start_time, int64_t* end_time, 
+extern int srs_rtmp_bandwidth_check(srs_rtmp_t rtmp,
+    int64_t* start_time, int64_t* end_time,
     int* play_kbps, int* publish_kbps,
     int* play_bytes, int* publish_bytes,
     int* play_duration, int* publish_duration
@@ -271,10 +271,10 @@ extern int srs_rtmp_bandwidth_check(srs_rtmp_t rtmp,
 *
 * @return 0, success; otherswise, failed.
 */
-extern int srs_rtmp_read_packet(srs_rtmp_t rtmp, 
+extern int srs_rtmp_read_packet(srs_rtmp_t rtmp,
     char* type, u_int32_t* timestamp, char** data, int* size
 );
-extern int srs_rtmp_write_packet(srs_rtmp_t rtmp, 
+extern int srs_rtmp_write_packet(srs_rtmp_t rtmp,
     char type, u_int32_t timestamp, char* data, int size
 );
 
@@ -339,7 +339,7 @@ extern srs_bool srs_rtmp_is_onMetaData(char type, char* data, int size);
 * 
 * @return 0, success; otherswise, failed.
 */
-extern int srs_audio_write_raw_frame(srs_rtmp_t rtmp, 
+extern int srs_audio_write_raw_frame(srs_rtmp_t rtmp,
     char sound_format, char sound_rate, char sound_size, char sound_type,
     char* frame, int frame_size, u_int32_t timestamp
 );
@@ -426,7 +426,7 @@ User also can send one by one:
     // PFrame
     srs_h264_write_raw_frames('0000000141E02041F8CDDC562BBDEFAD2F......', size, dts, pts) 
 */
-extern int srs_h264_write_raw_frames(srs_rtmp_t rtmp, 
+extern int srs_h264_write_raw_frames(srs_rtmp_t rtmp,
     char* frames, int frames_size, u_int32_t dts, u_int32_t pts
 );
 /**
@@ -468,7 +468,7 @@ extern srs_bool srs_h264_is_duplicated_pps_error(int error_code);
 * @return 0 false; otherwise, true.
 */
 extern srs_bool srs_h264_startswith_annexb(
-    char* h264_raw_data, int h264_raw_size, 
+    char* h264_raw_data, int h264_raw_size,
     int* pnb_start_code
 );
 
@@ -511,7 +511,7 @@ extern int srs_flv_read_header(srs_flv_t flv, char header[9]);
 * @return 0, success; otherswise, failed.
 * @remark, user must ensure the next is a tag, srs never check it.
 */
-extern int srs_flv_read_tag_header(srs_flv_t flv, 
+extern int srs_flv_read_tag_header(srs_flv_t flv,
     char* ptype, int32_t* pdata_size, u_int32_t* ptime
 );
 /**
@@ -540,7 +540,7 @@ extern int srs_flv_write_header(srs_flv_t flv, char header[9]);
 * @remark, auto write the 4bytes zero previous tag size.
 */
 /* write flv tag to file, auto write the 4bytes previous tag size */
-extern int srs_flv_write_tag(srs_flv_t flv, 
+extern int srs_flv_write_tag(srs_flv_t flv,
     char type, int32_t time, char* data, int size
 );
 /**
@@ -669,7 +669,7 @@ extern int srs_utils_parse_timestamp(
     u_int32_t time, char type, char* data, int size,
     u_int32_t* ppts
 );
-    
+
 /**
  * whether the flv tag specified by param type is ok.
  * @return true when tag is video/audio/script-data; otherwise, false.
@@ -940,9 +940,9 @@ extern const char* srs_human_format_time();
     #define srs_human_verbose(msg, ...) (void)0
     #define srs_human_raw(msg, ...) (void)0
 #else
-    #define srs_human_trace(msg, ...) printf("[%s] ", srs_human_format_time());printf(msg, ##__VA_ARGS__);printf("\n")
-    #define srs_human_verbose(msg, ...) printf("[%s] ", srs_human_format_time());printf(msg, ##__VA_ARGS__);printf("\n")
-    #define srs_human_raw(msg, ...) printf(msg, ##__VA_ARGS__)
+    #define srs_human_trace(msg, ...) __android_log_print(ANDROID_LOG_ERROR, "push",msg, ##__VA_ARGS__);
+    #define srs_human_verbose(msg, ...) __android_log_print(ANDROID_LOG_ERROR, "push",msg, ##__VA_ARGS__);
+    #define srs_human_raw(msg, ...) __android_log_print(ANDROID_LOG_ERROR, "push",msg, ##__VA_ARGS__)
 #endif
 
 /*************************************************************
@@ -1055,14 +1055,14 @@ typedef void* srs_hijack_io_t;
     #include <time.h>
     int gettimeofday(struct timeval* tv, struct timezone* tz);
     #define PRId64 "lld"
-    
+
     // for inet helpers.
     typedef int socklen_t;
     const char *inet_ntop(int af, const void *src, char *dst, socklen_t size);
-    
+
     // for mkdir().
     #include<direct.h>
-    
+
     // for open().
     typedef int mode_t;
     #define S_IRUSR 0
@@ -1073,7 +1073,7 @@ typedef void* srs_hijack_io_t;
     #define S_IXGRP 0
     #define S_IROTH 0
     #define S_IXOTH 0
-    
+
     // for file seek.
     #include <io.h>
     #include <fcntl.h>
@@ -1082,18 +1082,18 @@ typedef void* srs_hijack_io_t;
     #define lseek _lseek
     #define write _write
     #define read _read
-    
+
     // for pid.
     typedef int pid_t;
     pid_t getpid(void);
-    
+
     // for socket.
     ssize_t writev(int fd, const struct iovec *iov, int iovcnt);
     typedef int64_t useconds_t;
     int usleep(useconds_t usec);
     int socket_setup();
     int socket_cleanup();
-    
+
     // others.
     #define snprintf _snprintf
 #endif

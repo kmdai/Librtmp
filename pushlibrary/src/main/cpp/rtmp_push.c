@@ -5,6 +5,7 @@
 #include <malloc.h>
 #include "librtmp/log.h"
 
+int prefix;
 
 /**
  * 设置url
@@ -139,14 +140,12 @@ int send_sps_pps() {
 int send_rtmp_packet(NaluUnit *naluUnit, int keyFrame, uint32_t timeStamp, int add_queue) {
 
     RTMPPacket packet;
-    int body_size = naluUnit->size + 9;
+    int nalu_size = naluUnit->size - prefix;
+    int body_size = nalu_size + 9;
     RTMPPacket_Alloc(&packet, body_size);
     RTMPPacket_Reset(&packet);
     char *body = packet.m_body;
-    memset(body, 0, naluUnit->size + 9);
-//    for(int i=0;i<4;i++){
-//        LOG_V("---","%x",naluUnit->data[i]);
-//    }
+    memset(body, 0, body_size);
     int type;
     type = naluUnit->data[0] & 0x1f;
 
@@ -158,16 +157,16 @@ int send_rtmp_packet(NaluUnit *naluUnit, int keyFrame, uint32_t timeStamp, int a
     body[i++] = 0x00;
     body[i++] = 0x00;
 
-    body[i++] = (naluUnit->size >> 24) & 0xff;
-    body[i++] = (naluUnit->size >> 16) & 0xff;
-    body[i++] = (naluUnit->size >> 8) & 0xff;
-    body[i++] = naluUnit->size & 0xff;
+    body[i++] = (nalu_size >> 24) & 0xff;
+    body[i++] = (nalu_size >> 16) & 0xff;
+    body[i++] = (nalu_size >> 8) & 0xff;
+    body[i++] = nalu_size & 0xff;
 
     if (type == 5) {
         //关键帧1:Iframe  7:AVC
         body[0] = 0x17;
     }
-    memcpy(&body[i], naluUnit->data, naluUnit->size);
+    memcpy(&body[i], naluUnit->data + prefix, nalu_size);
 
     packet.m_nBodySize = body_size;
     packet.m_hasAbsTimestamp = 0;
@@ -179,12 +178,9 @@ int send_rtmp_packet(NaluUnit *naluUnit, int keyFrame, uint32_t timeStamp, int a
     int ret = 0;
     if (RTMP_IsConnected(m_pRtmp)) {
         ret = RTMP_SendPacket(m_pRtmp, &packet, TRUE);
-        if (ret) {
-            LOG_V("----", "%s", "RTMP_SendPacket_TRUE");
-        } else {
+        if (!ret) {
             LOG_V("----", "%s", "RTMP_SendPacket_FALSE");
         }
-        LOG_V("----RTMP_IsConnected", "%d", timeStamp);
     } else {
         LOG_V("----", "%s", "send_rtmp_packet_RTMP_IsConnected_FALSE");
     }
@@ -196,17 +192,15 @@ void set_sps_pps(uint8_t *data, uint32_t size) {
     NaluUnit *sps_nalu;
     NaluUnit *pps_nalu;
 
-    for (int i = 0; i < size; i++) {
-        LOG_V("data-----:", "%x", data[i]);
-    }
     int32_t nalu_pos = 0;
     //sps数据起始位
     int32_t sps_pos = find_sps_pps_pos(data, size, nalu_pos);
+    prefix = sps_pos;
     LOG_V("read_nalu_sps_pps----", "%d", sps_pos);
     int32_t pps_pos = find_sps_pps_pos(data, size, sps_pos);
     LOG_V("read_nalu_pps----", "%d", pps_pos);
 
-    int32_t sps_size = pps_pos - sps_pos - SPS_PPS_DIVIDE;
+    int32_t sps_size = pps_pos - sps_pos - prefix;
     sps_nalu = (NaluUnit *) malloc(sizeof(NaluUnit) + sps_size);
     sps_nalu->data = (uint8_t *) sps_nalu + sizeof(NaluUnit);
     sps_nalu->size = sps_size;
@@ -222,13 +216,7 @@ void set_sps_pps(uint8_t *data, uint32_t size) {
     pps_nalu->size = pps_size;
     pps_nalu->data = (uint8_t *) pps_nalu + sizeof(NaluUnit);
     memcpy(pps_nalu->data, data + pps_pos, (size_t) pps_nalu->size);
-//    for (int i = 0; i < pps_nalu->size; i++) {
-//        LOG_V("pps->data-----:", "%x", pps_nalu->data[i]);
-//    }
-    //释放之前保留的信息
-//    if (m_pSPS_PPS) {
-//        free(m_pSPS_PPS);
-//    }
+
     m_pSPS_PPS = (RTMPMetadata *) malloc(sizeof(RTMPMetadata) + sps_nalu->size + pps_nalu->size);
     m_pSPS_PPS->Sps = (uint8_t *) m_pSPS_PPS + sizeof(RTMPMetadata);
     m_pSPS_PPS->nSpsLen = sps_nalu->size;
@@ -300,9 +288,9 @@ int sendSpsAndPps(uint8_t *sps, int spsLen, uint8_t *pps, int ppsLen, long times
 
     /*发送*/
     if (RTMP_IsConnected(m_pRtmp)) {
-       if( RTMP_SendPacket(m_pRtmp, &packet, TRUE)){
-           LOG_V("---","%s","send_sps_pps_true");
-       }
+        if (RTMP_SendPacket(m_pRtmp, &packet, TRUE)) {
+            LOG_V("---", "%s", "send_sps_pps_true");
+        }
     }
     RTMPPacket_Free(&packet);
 //    free(packet);

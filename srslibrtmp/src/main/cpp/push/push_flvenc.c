@@ -57,9 +57,18 @@ char *put_32byte(char *out, uint32_t val) {
     return out + 4;
 }
 
+char *write4byte(char *out, int32_t value) {
+    char *pp = (char *) &value;
+    *out++ = pp[3];
+    *out++ = pp[2];
+    *out++ = pp[1];
+    *out++ = pp[0];
+    return out;
+}
+
 char *put_string(char *out, char *string) {
     int len = (int) strlen(string);
-    out = put_16byte(out, len);
+    out = put_16byte(out, (uint16_t) len);
     memcpy(out, string, len);
     return out + len;
 }
@@ -103,7 +112,7 @@ int find_sps_pps_pos(char *data, int size, int offset) {
 }
 
 int create_AVCVideoData(char **data, char *sps, char *pps, int spsLen, int ppsLen) {
-    *data = (char *) malloc(spsLen + ppsLen + 16);
+    *data = (char *) malloc(spsLen + ppsLen + 5 + 5 + 3 + 3);
     char *body = *data;
     int i = 0;
     body[i++] = 0x17;
@@ -118,13 +127,13 @@ int create_AVCVideoData(char **data, char *sps, char *pps, int spsLen, int ppsLe
     body[i++] = sps[1];
     body[i++] = sps[2];
     body[i++] = sps[3];
-    body[i++] = (char) 0xFF;
+    body[i++] = 0xFF;
 
     /*sps*/
-    body[i++] = (char) 0xE1;
+    body[i++] = 0xE1;
     //sps大小
-    body[i++] = (char) (spsLen >> 8);
-    body[i++] = (char) (spsLen & 0xff);
+    body[i++] = (spsLen >> 8) & 0xff;
+    body[i++] = spsLen & 0xff;
 
     memcpy(body + i, sps, spsLen);
 
@@ -132,8 +141,8 @@ int create_AVCVideoData(char **data, char *sps, char *pps, int spsLen, int ppsLe
 
     /*pps*/
     body[i++] = 0x01;
-    body[i++] = (char) (ppsLen >> 8);
-    body[i++] = (char) (ppsLen & 0xff);
+    body[i++] = (ppsLen >> 8) & 0xff;
+    body[i++] = ppsLen & 0xff;
     memcpy(body + i, pps, ppsLen);
 
     i += ppsLen;
@@ -148,15 +157,15 @@ int create_MetaData(char **data, double framerate, double videodatarate, double 
     char *start = (char *) malloc(256);
     memset(start, 0, 256);
     char *out = start;
-    out = put_byte(out, 2);
+    out = put_byte(out, RTMP_AMF0_String);
     out = put_string(out, "onMetaData");
-    out = put_byte(out, 8);
+    out = put_byte(out, RTMP_AMF0_EcmaArray);
     out = put_32byte(out, 10);
     //编码方式
-    out = put_string(out, "videocodecid");
-    out = put_64byte(out, videocodecid);
     out = put_string(out, "framerate");
     out = put_64byte(out, framerate);
+    out = put_string(out, "videocodecid");
+    out = put_64byte(out, videocodecid);
     out = put_string(out, "videodatarate");
     out = put_64byte(out, videodatarate);
     out = put_string(out, "width");
@@ -174,7 +183,7 @@ int create_MetaData(char **data, double framerate, double videodatarate, double 
     out = put_string(out, "stereo");
     out = put_byte(out, RTMP_AMF0_Boolean);
     out = put_byte(out, stereo);
-    out = put_16byte(out, 0x00);
+    out = put_16byte(out, 0);
     out = put_byte(out, RTMP_AMF0_ObjectEnd);
     int size = (int) (out - start);
 
@@ -193,9 +202,9 @@ int create_AVCVideoPacket(char **data, char *sps_pps, int size) {
     ppsS = find_sps_pps_pos(sps_pps, size, spsS);
     int spsLen = ppsS - spsS - prefix;
     int ppsLen = size - ppsS;
+
     char *sps = (char *) malloc(spsLen);
     memcpy(sps, sps_pps + spsS, spsLen);
-
     char *pps = (char *) malloc(ppsLen);
     memcpy(pps, sps_pps + ppsS, ppsLen);
 
@@ -211,23 +220,26 @@ int create_VideoPacket(char **data, char *nalu, int type, int size, int time) {
     *data = (char *) malloc(nalu_size + 9);
     char *body = *data;
     int i = 0;
-    //默认是非关键帧(2:Pframe  7:AVC)
-    body[i++] = 0x27;
-    if (type == 1) {
+    int key = nalu[prefix] & 0x1f;
+    int frame_type = 2;
+    if (key == 5) {
         //关键帧1:Iframe  7:AVC
-        body[0] = 0x17;
+        frame_type = 1;
+//        SRS_LOGE("---create_VideoPacket size=关键帧1");
     }
+
+    body[i++] = (frame_type << 4) | 7;
 
     body[i++] = 0x01;
 
     body[i++] = 0x00;
     body[i++] = 0x00;
     body[i++] = 0x00;
-    body[i++] = (char) (size >> 24);
-    body[i++] = (char) (size >> 16);
-    body[i++] = (char) (size >> 8);
-    body[i++] = (char) (size & 0xff);
 
+    body[i++] = (nalu_size >> 24) & 0xff;
+    body[i++] = (nalu_size >> 16) & 0xff;
+    body[i++] = (nalu_size >> 8) & 0xff;
+    body[i++] = nalu_size & 0xff;
 
     memcpy(body + i, nalu + prefix, nalu_size);
     i += nalu_size;
