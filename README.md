@@ -1,2 +1,3 @@
-##Librtmp for android
->this is test
+## Librtmp for android
+> pushlirtmp 使用librtmp </br>
+> srslibrtmp 使用srs </br>
