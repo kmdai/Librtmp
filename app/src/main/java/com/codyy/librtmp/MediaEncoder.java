@@ -1,16 +1,16 @@
 package com.codyy.librtmp;
 
+import android.media.AudioFormat;
+import android.media.AudioRecord;
 import android.media.MediaCodec;
 import android.media.MediaCodecInfo;
 import android.media.MediaCodecList;
 import android.media.MediaFormat;
-import android.os.Handler;
-import android.os.HandlerThread;
-import android.os.Message;
-import android.support.annotation.NonNull;
+import android.media.MediaRecorder;
 import android.text.TextUtils;
 import android.util.Log;
 import android.view.Surface;
+import android.widget.Toast;
 
 import com.kmdai.rtmppush.LibrtmpManager;
 import com.kmdai.srslibrtmp.SRSLibrtmpManager;
@@ -19,26 +19,31 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 
 
-public class AvcEncoder {
+public class MediaEncoder {
 
-    private MediaCodec mMediaCodec;
+    private MediaCodec mVideoMediaCodec;
+    private MediaCodec mAudioCodec;
+    private AudioRecord mAudioRecord;
     int m_width;
     int m_height;
     byte[] m_info = null;
     private Surface mSurface;
     private double mFrameRate;
     private int mBitrate;
-    ByteBuffer mByteBuffer;
     private final int TIMEOUT_US = 10000;
+    private final int AUDIO_SAMPLE_RATE = 44100;
+    private final int AUDIO_CHANNEL_COUNT = 2;
     boolean mIsStop;
     private LibrtmpManager mLibrtmpManager;
-//    private String mRtmpUrl = "rtmp://172.96.16.188:1935/srs/kmdai";
+    //    private String mRtmpUrl = "rtmp://172.96.16.188:1935/srs/kmdai";
     private String mRtmpUrl = "rtmp://10.5.225.38:1935/srs/kmdai";
     //                RTMPMuxer mRTMPMuxer;
     long indexTime = 0;
     private SRSLibrtmpManager mSRSLibrtmpManager;
 
-    public AvcEncoder(int width, int height, double framerate, int bitrate) {
+    private int mMiniAudioBufferSize;
+
+    public MediaEncoder(int width, int height, double framerate, int bitrate) {
         mIsStop = false;
         m_width = width;
         m_height = height;
@@ -62,22 +67,45 @@ public class AvcEncoder {
             for (String type : strings) {
                 str += type;
             }
-            Log.e("AvcEncoder---", mediaCodecInfo.getName() + ":" + str);
+            Log.e("MediaEncoder---", mediaCodecInfo.getName() + ":" + str);
         }
         if (TextUtils.isEmpty(name)) {
             Log.e("-------", "name is null");
             return;
         }
-        mByteBuffer = ByteBuffer.allocate(8);
-
         try {
-            mMediaCodec = MediaCodec.createByCodecName(name);
+            mVideoMediaCodec = MediaCodec.createByCodecName(name);
         } catch (IOException e) {
             e.printStackTrace();
         }
-        mMediaCodec.configure(mediaFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
-        mSurface = mMediaCodec.createInputSurface();
-        mMediaCodec.start();
+        mVideoMediaCodec.configure(mediaFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
+        mSurface = mVideoMediaCodec.createInputSurface();
+        mVideoMediaCodec.start();
+    }
+
+    /**
+     *
+     */
+    private void audioInit() {
+        MediaFormat mediaFormat = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_AAC, AUDIO_SAMPLE_RATE, AUDIO_CHANNEL_COUNT);
+        MediaCodecList mediaCodecList = new MediaCodecList(MediaCodecList.REGULAR_CODECS);
+        MediaCodecInfo[] mediaCodecInfos = mediaCodecList.getCodecInfos();
+        String name = mediaCodecList.findEncoderForFormat(mediaFormat);
+        try {
+            mAudioCodec = MediaCodec.createByCodecName(name);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        mAudioCodec.configure(mediaFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
+        //最小的缓冲区
+        mMiniAudioBufferSize = AudioRecord.getMinBufferSize(AUDIO_SAMPLE_RATE,
+                AudioFormat.CHANNEL_IN_STEREO,
+                AudioFormat.ENCODING_PCM_16BIT);
+        mAudioRecord = new AudioRecord(MediaRecorder.AudioSource.MIC,
+                AUDIO_SAMPLE_RATE,
+                AudioFormat.CHANNEL_IN_STEREO,
+                AudioFormat.ENCODING_PCM_16BIT,
+                mMiniAudioBufferSize);
     }
 
     public Surface getSurface() {
@@ -115,9 +143,9 @@ public class AvcEncoder {
                 if (mIsStop) {
                     break;
                 }
-                int outputBufferId = mMediaCodec.dequeueOutputBuffer(bufferInfo, TIMEOUT_US);
+                int outputBufferId = mVideoMediaCodec.dequeueOutputBuffer(bufferInfo, TIMEOUT_US);
                 if (outputBufferId >= 0) {
-                    ByteBuffer outputBuffer = mMediaCodec.getOutputBuffer(outputBufferId);
+                    ByteBuffer outputBuffer = mVideoMediaCodec.getOutputBuffer(outputBufferId);
                     byte[] outData = new byte[bufferInfo.size];
                     outputBuffer.get(outData, 0, bufferInfo.size);
                     calcTotalTime(bufferInfo.presentationTimeUs / 1000);
@@ -133,12 +161,12 @@ public class AvcEncoder {
                     }
                 }
                 if (outputBufferId >= 0) {
-                    mMediaCodec.releaseOutputBuffer(outputBufferId, false);
+                    mVideoMediaCodec.releaseOutputBuffer(outputBufferId, false);
                 }
             }
             try {
-                mMediaCodec.stop();
-                mMediaCodec.release();
+                mVideoMediaCodec.stop();
+                mVideoMediaCodec.release();
                 Log.d("---", ":release");
 //                mSRSLibrtmpManager.release();
                 reset();
