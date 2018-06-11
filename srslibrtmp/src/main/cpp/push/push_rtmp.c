@@ -96,12 +96,6 @@ void *push_data(void *gVm) {
                 SRS_LOGE("srs_rtmp_write_packet fail:%d ", ret);
             }
         }
-        char *data = (char *) malloc(node_p->size);
-        memcpy(data, node_p->data, node_p->size);
-        if ((ret = srs_rtmp_write_packet(srs_rtmp, SRS_RTMP_TYPE_VIDEO, node_p->time, data,
-                                         node_p->size)) != 0) {
-            SRS_LOGE("srs_rtmp_write_packet fail:%d ", ret);
-        }
 //        srs_h264_write_raw_frames(srs_rtmp,node_p->data,node_p->size,node_p->time,node_p->time);
         free(node_p);
     }

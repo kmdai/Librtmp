@@ -36,7 +36,7 @@ public class MediaEncoder {
     boolean mIsStop;
     private LibrtmpManager mLibrtmpManager;
     //    private String mRtmpUrl = "rtmp://172.96.16.188:1935/srs/kmdai";
-    private String mRtmpUrl = "rtmp://10.5.225.38:1935/srs/kmdai";
+    private String mRtmpUrl = "rtmp://10.5.225.38:1935/mobile/kmdai";
     //                RTMPMuxer mRTMPMuxer;
     long indexTime = 0;
     private SRSLibrtmpManager mSRSLibrtmpManager;
@@ -125,18 +125,18 @@ public class MediaEncoder {
 
         @Override
         public void run() {
-            mLibrtmpManager.rtmpInit();
-            mLibrtmpManager.setUrl(mRtmpUrl);
-//            if (!mSRSLibrtmpManager.setUrl(mRtmpUrl)) {
-//                return;
-//            }
-//            mSRSLibrtmpManager.setFrameRate(mFrameRate);
-//            mSRSLibrtmpManager.setHeight(m_height);
-//            mSRSLibrtmpManager.setWidth(m_width);
-//            mSRSLibrtmpManager.setVideodatarate(mBitrate);
-//            mSRSLibrtmpManager.setAudiodatarate(29);
-//            mSRSLibrtmpManager.setAudiosamplerate(44100);
-//            mSRSLibrtmpManager.setAudiosamplesize(16);
+//            mLibrtmpManager.rtmpInit();
+//            mLibrtmpManager.setUrl(mRtmpUrl);
+            if (!mSRSLibrtmpManager.setUrl(mRtmpUrl)) {
+                return;
+            }
+            mSRSLibrtmpManager.setFrameRate(mFrameRate);
+            mSRSLibrtmpManager.setHeight(m_height);
+            mSRSLibrtmpManager.setWidth(m_width);
+            mSRSLibrtmpManager.setVideodatarate(mBitrate);
+            mSRSLibrtmpManager.setAudiodatarate(29);
+            mSRSLibrtmpManager.setAudiosamplerate(44100);
+            mSRSLibrtmpManager.setAudiosamplesize(16);
             MediaCodec.BufferInfo bufferInfo = new MediaCodec.BufferInfo();
             int time = 0;
             for (; ; ) {
@@ -151,13 +151,13 @@ public class MediaEncoder {
                     calcTotalTime(bufferInfo.presentationTimeUs / 1000);
 //                    Log.d("----","offset--"+bufferInfo.offset);
                     if (bufferInfo.flags == MediaCodec.BUFFER_FLAG_CODEC_CONFIG) {
-//                        mSRSLibrtmpManager.addFrame(outData, outData.length, bufferInfo.flags, 0);
-                        mLibrtmpManager.setSpsPps(outData, outData.length);
+                        mSRSLibrtmpManager.addFrame(outData, outData.length, bufferInfo.flags, 0);
+//                        mLibrtmpManager.setSpsPps(outData, outData.length);
                     } else {
 //                        Log.d("----", "getTimeIndex()--" + getTimeIndex());
-                        mLibrtmpManager.sendChunk(outData, outData.length, bufferInfo.flags, getTimeIndex());
+//                        mLibrtmpManager.sendChunk(outData, outData.length, bufferInfo.flags, getTimeIndex());
 //                        time+=30;
-//                        mSRSLibrtmpManager.addFrame(outData, outData.length, bufferInfo.flags, getTimeIndex());
+                        mSRSLibrtmpManager.addFrame(outData, outData.length, bufferInfo.flags, getTimeIndex());
                     }
                 }
                 if (outputBufferId >= 0) {
@@ -168,9 +168,9 @@ public class MediaEncoder {
                 mVideoMediaCodec.stop();
                 mVideoMediaCodec.release();
                 Log.d("---", ":release");
-//                mSRSLibrtmpManager.release();
+                mSRSLibrtmpManager.release();
                 reset();
-                mLibrtmpManager.rtmpFree();
+//                mLibrtmpManager.rtmpFree();
 //                mRTMPMuxer.close();
             } catch (Exception e) {
                 e.printStackTrace();
