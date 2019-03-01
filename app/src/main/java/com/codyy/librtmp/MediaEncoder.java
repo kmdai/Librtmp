@@ -7,6 +7,7 @@ import android.media.MediaCodecInfo;
 import android.media.MediaCodecList;
 import android.media.MediaFormat;
 import android.media.MediaRecorder;
+import android.os.Build;
 import android.text.TextUtils;
 import android.util.Log;
 import android.view.Surface;
@@ -32,32 +33,27 @@ public class MediaEncoder {
     private int mBitrate;
     private final int TIMEOUT_US = 10000;
     private final int AUDIO_SAMPLE_RATE = 44100;
-    private final int AUDIO_CHANNEL_COUNT = 2;
+    private final int AUDIO_CHANNEL_COUNT = 1;
     boolean mIsStop;
-    private LibrtmpManager mLibrtmpManager;
-    //    private String mRtmpUrl = "rtmp://172.96.16.188:1935/srs/kmdai";
-    private String mRtmpUrl = "rtmp://10.5.225.38:1935/mobile/kmdai";
+    //    private LibrtmpManager mLibrtmpManager;
+//        private String mRtmpUrl = "rtmp://172.96.16.188:1935/srs/kmdai";
+    private String mRtmpUrl = "rtmp://10.23.164.19:1935/srs/kmdai";
     //                RTMPMuxer mRTMPMuxer;
     long indexTime = 0;
     private SRSLibrtmpManager mSRSLibrtmpManager;
 
     private int mMiniAudioBufferSize;
 
-    public MediaEncoder(int width, int height, double framerate, int bitrate) {
+    public MediaEncoder(int width, int height, int framerate, int bitrate) {
         mIsStop = false;
         m_width = width;
         m_height = height;
         mFrameRate = framerate;
         mBitrate = bitrate;
         mSRSLibrtmpManager = new SRSLibrtmpManager();
-        mLibrtmpManager = new LibrtmpManager();
+//        mLibrtmpManager = new LibrtmpManager();
         reset();
         MediaFormat mediaFormat = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, width, height);
-        mediaFormat.setInteger(MediaFormat.KEY_BIT_RATE, bitrate);
-        mediaFormat.setFloat(MediaFormat.KEY_FRAME_RATE, (float) framerate);
-        mediaFormat.setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AVCProfileMain);
-        mediaFormat.setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface);
-        mediaFormat.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1);
         MediaCodecList mediaCodecList = new MediaCodecList(MediaCodecList.REGULAR_CODECS);
         MediaCodecInfo[] mediaCodecInfos = mediaCodecList.getCodecInfos();
         String name = mediaCodecList.findEncoderForFormat(mediaFormat);
@@ -72,6 +68,16 @@ public class MediaEncoder {
         if (TextUtils.isEmpty(name)) {
             Log.e("-------", "name is null");
             return;
+        }
+
+        mediaFormat.setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface);
+        mediaFormat.setFloat(MediaFormat.KEY_FRAME_RATE, framerate);
+        mediaFormat.setInteger(MediaFormat.KEY_BIT_RATE, bitrate);
+        mediaFormat.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1);
+        mediaFormat.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 0);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+            long repeatFrameAfter = 1200L * 1000 / framerate;
+            mediaFormat.setLong(MediaFormat.KEY_REPEAT_PREVIOUS_FRAME_AFTER, repeatFrameAfter);
         }
         try {
             mVideoMediaCodec = MediaCodec.createByCodecName(name);
