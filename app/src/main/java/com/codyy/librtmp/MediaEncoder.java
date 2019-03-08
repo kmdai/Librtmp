@@ -18,6 +18,9 @@ import com.kmdai.srslibrtmp.SRSLibrtmpManager;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+import static android.media.AudioFormat.CHANNEL_IN_MONO;
 
 
 public class MediaEncoder {
@@ -33,11 +36,12 @@ public class MediaEncoder {
     private int mBitrate;
     private final int TIMEOUT_US = 10000;
     private final int AUDIO_SAMPLE_RATE = 44100;
+    private final int AUDIO_BIT_RATE = 32000;
     private final int AUDIO_CHANNEL_COUNT = 1;
-    boolean mIsStop;
+    AtomicBoolean mIsStop;
     //    private LibrtmpManager mLibrtmpManager;
 //        private String mRtmpUrl = "rtmp://172.96.16.188:1935/srs/kmdai";
-    private String mRtmpUrl = "rtmp://10.23.164.19:1935/srs/kmdai";
+    private String mRtmpUrl = "rtmp://10.23.164.27:1935/srs/kmdai";
     //                RTMPMuxer mRTMPMuxer;
     long indexTime = 0;
     private SRSLibrtmpManager mSRSLibrtmpManager;
@@ -45,7 +49,7 @@ public class MediaEncoder {
     private int mMiniAudioBufferSize;
 
     public MediaEncoder(int width, int height, int framerate, int bitrate) {
-        mIsStop = false;
+        mIsStop = new AtomicBoolean(false);
         m_width = width;
         m_height = height;
         mFrameRate = framerate;
@@ -75,17 +79,15 @@ public class MediaEncoder {
         mediaFormat.setInteger(MediaFormat.KEY_BIT_RATE, bitrate);
         mediaFormat.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1);
         mediaFormat.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 0);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
-            long repeatFrameAfter = 1200L * 1000 / framerate;
-            mediaFormat.setLong(MediaFormat.KEY_REPEAT_PREVIOUS_FRAME_AFTER, repeatFrameAfter);
-        }
         try {
             mVideoMediaCodec = MediaCodec.createByCodecName(name);
+//            mVideoMediaCodec=MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC);
         } catch (IOException e) {
             e.printStackTrace();
         }
         mVideoMediaCodec.configure(mediaFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
         mSurface = mVideoMediaCodec.createInputSurface();
+        audioInit();
         mVideoMediaCodec.start();
     }
 
@@ -93,16 +95,27 @@ public class MediaEncoder {
      *
      */
     private void audioInit() {
-        MediaFormat mediaFormat = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_AAC, AUDIO_SAMPLE_RATE, AUDIO_CHANNEL_COUNT);
+        MediaFormat mediaFormat = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_AAC, AUDIO_SAMPLE_RATE, CHANNEL_IN_MONO);
         MediaCodecList mediaCodecList = new MediaCodecList(MediaCodecList.REGULAR_CODECS);
         MediaCodecInfo[] mediaCodecInfos = mediaCodecList.getCodecInfos();
         String name = mediaCodecList.findEncoderForFormat(mediaFormat);
+        for (MediaCodecInfo mediaCodecInfo : mediaCodecInfos) {
+            String[] strings = mediaCodecInfo.getSupportedTypes();
+            String str = "";
+            for (String type : strings) {
+                str += type;
+            }
+            Log.e("mAudioCodec---", mediaCodecInfo.getName() + ":" + str);
+        }
         try {
             mAudioCodec = MediaCodec.createByCodecName(name);
         } catch (IOException e) {
             e.printStackTrace();
         }
+        mediaFormat.setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AACObjectLC);
+        mediaFormat.setInteger(MediaFormat.KEY_BIT_RATE, AUDIO_BIT_RATE);
         mAudioCodec.configure(mediaFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
+
         //最小的缓冲区
         mMiniAudioBufferSize = AudioRecord.getMinBufferSize(AUDIO_SAMPLE_RATE,
                 AudioFormat.CHANNEL_IN_STEREO,
@@ -120,7 +133,7 @@ public class MediaEncoder {
 
 
     public void close() {
-        mIsStop = true;
+         mIsStop.set(true);
     }
 
     public void start() {
@@ -146,24 +159,30 @@ public class MediaEncoder {
             MediaCodec.BufferInfo bufferInfo = new MediaCodec.BufferInfo();
             int time = 0;
             for (; ; ) {
-                if (mIsStop) {
+                if (mIsStop.get()) {
                     break;
                 }
                 int outputBufferId = mVideoMediaCodec.dequeueOutputBuffer(bufferInfo, TIMEOUT_US);
+
                 if (outputBufferId >= 0) {
                     ByteBuffer outputBuffer = mVideoMediaCodec.getOutputBuffer(outputBufferId);
-                    byte[] outData = new byte[bufferInfo.size];
-                    outputBuffer.get(outData, 0, bufferInfo.size);
-                    calcTotalTime(bufferInfo.presentationTimeUs / 1000);
+                    if (outputBuffer != null) {
+                        outputBuffer.position(bufferInfo.offset);
+                        outputBuffer.limit(bufferInfo.offset + bufferInfo.size);
+                        byte[] outData = new byte[bufferInfo.size];
+                        outputBuffer.get(outData, 0, bufferInfo.size);
+                        calcTotalTime(bufferInfo.presentationTimeUs / 1000);
 //                    Log.d("----","offset--"+bufferInfo.offset);
-                    if (bufferInfo.flags == MediaCodec.BUFFER_FLAG_CODEC_CONFIG) {
-                        mSRSLibrtmpManager.addFrame(outData, outData.length, bufferInfo.flags, 0);
+                        if (bufferInfo.flags == MediaCodec.BUFFER_FLAG_CODEC_CONFIG) {
+                            mSRSLibrtmpManager.addFrame(outData, outData.length, bufferInfo.flags, 0);
 //                        mLibrtmpManager.setSpsPps(outData, outData.length);
-                    } else {
+                        } else {
 //                        Log.d("----", "getTimeIndex()--" + getTimeIndex());
 //                        mLibrtmpManager.sendChunk(outData, outData.length, bufferInfo.flags, getTimeIndex());
 //                        time+=30;
-                        mSRSLibrtmpManager.addFrame(outData, outData.length, bufferInfo.flags, getTimeIndex());
+                            mSRSLibrtmpManager.addFrame(outData, outData.length, bufferInfo.flags, getTimeIndex());
+                        }
+                        outputBuffer.clear();
                     }
                 }
                 if (outputBufferId >= 0) {

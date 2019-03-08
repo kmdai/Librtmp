@@ -23,9 +23,9 @@ public class MainActivity extends Activity {
     private int mDisplayHeight;
 
     int width = mDisplayWidth = 1280;
-    int height = mDisplayHeight = 720;
+    int height = mDisplayHeight = 800;
     int framerate = 25;
-    int bitrate = 800000;
+    int bitrate = 3500000;
     private MediaProjectionManager mProjectionManager;
     private MediaProjection mMediaProjection;
     private VirtualDisplay mVirtualDisplay;

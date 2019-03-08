@@ -29,4 +29,6 @@ public class SRSLibrtmpManager {
     public native void setAudiosamplerate(double audiosamplerate);
 
     public native void setAudiosamplesize(double audiosamplesize);
+
+    public native Object getSurface();
 }

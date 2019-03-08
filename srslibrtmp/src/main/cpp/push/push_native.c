@@ -20,7 +20,7 @@ jboolean setUrl(JNIEnv *env, jobject instance, jstring url) {
 
 void addFrame(JNIEnv *env, jobject instance, jbyteArray data, jint size, jint type, jint time) {
     jbyte *chunk = (*env)->GetByteArrayElements(env, data, NULL);
-    q_node_p node = create_node(chunk, size, type, time);
+    q_node_p node = create_node((char *) chunk, size, type, time);
     in_queue(node);
     (*env)->ReleaseByteArrayElements(env, data, chunk, 0);
 }
@@ -57,6 +57,9 @@ void setAudiosamplesize(JNIEnv *env, jobject instance, jdouble audiosamplesize) 
     set_audiosamplesize(audiosamplesize);
 }
 
+jobject getSurface(JNIEnv *env, jobject instance) {
+}
+
 /**
  * 本地函数
  */
@@ -72,6 +75,7 @@ const JNINativeMethod srs_methods[] = {
         {"setAudiosamplerate", "(D)V",                  (void *) setAudiosamplerate},
         {"setAudiosamplesize", "(D)V",                  (void *) setAudiosamplesize}
 };
+
 /**
  * 动态注册本地函数
  * @param vm

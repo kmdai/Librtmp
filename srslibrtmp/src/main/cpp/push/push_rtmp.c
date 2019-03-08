@@ -85,11 +85,11 @@ void *push_data(void *gVm) {
             char *data;
             int size = create_AVCVideoPacket(&data, node_p->data, node_p->size);
             srs_rtmp_write_packet(srs_rtmp, SRS_RTMP_TYPE_VIDEO, 0, data, size);
-//            srs_human_print_rtmp_packet(SRS_RTMP_TYPE_VIDEO,node_p->time,data,size);
+            srs_human_print_rtmp_packet(SRS_RTMP_TYPE_VIDEO,node_p->time,data,size);
         } else {
             char *data;
             int size = create_VideoPacket(&data, node_p->data, node_p->type, node_p->size, 0);
-//            srs_human_print_rtmp_packet(SRS_RTMP_TYPE_VIDEO,node_p->time,data,size);
+            srs_human_print_rtmp_packet(SRS_RTMP_TYPE_VIDEO,node_p->time,data,size);
             if ((ret = srs_rtmp_write_packet(srs_rtmp, SRS_RTMP_TYPE_VIDEO, node_p->time, data,
                                              size)) !=
                 0) {

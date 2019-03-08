@@ -84,7 +84,7 @@ else()
     add_definitions(-D__arm__)
 endif()
 
-#add_definitions(-DSRS_DISABLE_LOG)
+add_definitions(-DSRS_DISABLE_LOG)
 
 set(srs-librtmp
    ${core}
@@ -104,5 +104,9 @@ set(push
     push/push_flvenc.h
     push/push_flvenc.c)
 
-add_library(srsPush SHARED ${push})
-target_link_libraries(srsPush srsrtmp )
+set(media
+    media/MediaEncoder.cpp
+    media/MediaEncoder.h)
+
+add_library(srsPush SHARED ${push} ${media})
+target_link_libraries(srsPush srsrtmp mediandk)
