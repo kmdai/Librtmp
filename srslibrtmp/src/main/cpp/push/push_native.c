@@ -18,9 +18,10 @@ jboolean setUrl(JNIEnv *env, jobject instance, jstring url) {
     return result != 0 ? JNI_FALSE : JNI_TRUE;
 }
 
-void addFrame(JNIEnv *env, jobject instance, jbyteArray data, jint size, jint type, jint time) {
+void addFrame(JNIEnv *env, jobject instance, jbyteArray data, jint size, jint type, jint flag,
+              jint time) {
     jbyte *chunk = (*env)->GetByteArrayElements(env, data, NULL);
-    q_node_p node = create_node((char *) chunk, size, type, time);
+    q_node_p node = create_node((char *) chunk, size, type, flag, time);
     in_queue(node);
     (*env)->ReleaseByteArrayElements(env, data, chunk, 0);
 }
@@ -49,6 +50,10 @@ void setAudiodatarate(JNIEnv *env, jobject instance, jdouble audiodatarate) {
     set_audiodatarate(audiodatarate);
 }
 
+void setChannelCount(JNIEnv *env, jobject instance, jint channel) {
+    set_audiochannel(channel);
+}
+
 void setAudiosamplerate(JNIEnv *env, jobject instance, jdouble audiosamplerate) {
     set_audiosamplerate(audiosamplerate);
 }
@@ -66,9 +71,10 @@ jobject getSurface(JNIEnv *env, jobject instance) {
 const JNINativeMethod srs_methods[] = {
         {"setUrl",             "(Ljava/lang/String;)Z", (void *) setUrl},
         {"release",            "()V",                   (void *) release},
-        {"addFrame",           "([BIII)V",              (void *) addFrame},
+        {"addFrame",           "([BIIII)V",             (void *) addFrame},
         {"setFrameRate",       "(D)V",                  (void *) setFrameRate},
         {"setVideodatarate",   "(D)V",                  (void *) setVideodatarate},
+        {"setChannelCount",    "(I)V",                  (void *) setChannelCount},
         {"setWidth",           "(D)V",                  (void *) setWidth},
         {"setHeight",          "(D)V",                  (void *) setHeight},
         {"setAudiodatarate",   "(D)V",                  (void *) setAudiodatarate},

@@ -95,13 +95,14 @@ int destroy_queue() {
     return 0;
 }
 
-q_node_p create_node(char *data, int32_t size, int32_t type, uint32_t time) {
+q_node_p create_node(char *data, int32_t size, int32_t type, int32_t flag, uint32_t time) {
     q_node_p node = (q_node_p) malloc(sizeof(q_node) + size);
     node->data = (char *) node + sizeof(q_node);
     memcpy(node->data, data, size);
     node->time = time;
     node->size = size;
     node->type = type;
+    node->flag = flag;
     node->next = NULL;
     return node;
 }

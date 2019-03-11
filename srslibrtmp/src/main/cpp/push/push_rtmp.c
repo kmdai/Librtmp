@@ -46,8 +46,8 @@ void write_raw_frames(char *data, int32_t size, u_int32_t dts, u_int32_t pts) {
 }
 
 void add_frame(char *data, int32_t size, int32_t type, uint32_t time) {
-    q_node_p node_p = create_node(data, size, type, time);
-    in_queue(node_p);
+//    q_node_p node_p = create_node(data, size, type, time);
+//    in_queue(node_p);
 }
 
 void *push_data(void *gVm) {
@@ -65,39 +65,52 @@ void *push_data(void *gVm) {
             (*gvm)->DetachCurrentThread(gvm);
             return (void *) 1;
         }
-        if (node_p->type == NODE_FLAG_CODEC_CONFIG) {
-            if (media_config_p) {
-                char *meta;
-                int metaSize = create_MetaData(&meta,
-                                               media_config_p->framerate,
-                                               media_config_p->videodatarate,
-                                               7,
-                                               media_config_p->width,
-                                               media_config_p->height,
-                                               10,
-                                               media_config_p->audiodatarate,
-                                               media_config_p->audiosamplerate,
-                                               media_config_p->audiosamplesize,
-                                               1);
-                srs_human_print_rtmp_packet(SRS_RTMP_TYPE_SCRIPT, node_p->time, meta, metaSize);
-                srs_rtmp_write_packet(srs_rtmp, SRS_RTMP_TYPE_SCRIPT, 0, meta, metaSize);
-            }
-            char *data;
-            int size = create_AVCVideoPacket(&data, node_p->data, node_p->size);
-            srs_rtmp_write_packet(srs_rtmp, SRS_RTMP_TYPE_VIDEO, 0, data, size);
-            srs_human_print_rtmp_packet(SRS_RTMP_TYPE_VIDEO,node_p->time,data,size);
-        } else {
-            char *data;
-            int size = create_VideoPacket(&data, node_p->data, node_p->type, node_p->size, 0);
-            srs_human_print_rtmp_packet(SRS_RTMP_TYPE_VIDEO,node_p->time,data,size);
-            if ((ret = srs_rtmp_write_packet(srs_rtmp, SRS_RTMP_TYPE_VIDEO, node_p->time, data,
-                                             size)) !=
-                0) {
-                SRS_LOGE("srs_rtmp_write_packet fail:%d ", ret);
-            }
+        if (node_p->type == NODE_TYPE_AUDIO) {
+          if( srs_audio_write_raw_frame(srs_rtmp,
+                                      10,
+                                      3,
+                                      1,
+                                      0,
+                                      node_p->data, node_p->size, node_p->time)!=0){
+              SRS_LOGE("srs_audio_write_raw_frame error");
+          }
+        } else if (node_p->type == NODE_TYPE_VIDEO) {
+            srs_h264_write_raw_frames(srs_rtmp, node_p->data, node_p->size, node_p->time,
+                                      node_p->time);
         }
+//        if (node_p->flag == NODE_FLAG_CODEC_CONFIG) {
+//            if (media_config_p) {
+//                char *meta;
+//                int metaSize = create_MetaData(&meta,
+//                                               media_config_p->framerate,
+//                                               media_config_p->videodatarate,
+//                                               7,
+//                                               media_config_p->width,
+//                                               media_config_p->height,
+//                                               10,
+//                                               media_config_p->audiodatarate,
+//                                               media_config_p->audiosamplerate,
+//                                               media_config_p->audiosamplesize,
+//                                               1);
+//                srs_human_print_rtmp_packet(SRS_RTMP_TYPE_SCRIPT, node_p->time, meta, metaSize);
+//                srs_rtmp_write_packet(srs_rtmp, SRS_RTMP_TYPE_SCRIPT, 0, meta, metaSize);
+//            }
+//            char *data;
+//            int size = create_AVCVideoPacket(&data, node_p->data, node_p->size);
+//            srs_rtmp_write_packet(srs_rtmp, SRS_RTMP_TYPE_VIDEO, 0, data, size);
+//            srs_human_print_rtmp_packet(SRS_RTMP_TYPE_VIDEO, node_p->time, data, size);
+//        } else {
+//            char *data;
+//            int size = create_VideoPacket(&data, node_p->data, node_p->flag, node_p->size, 0);
+//            srs_human_print_rtmp_packet(SRS_RTMP_TYPE_VIDEO, node_p->time, data, size);
+//            if ((ret = srs_rtmp_write_packet(srs_rtmp, SRS_RTMP_TYPE_VIDEO, node_p->time, data,
+//                                             size)) !=
+//                0) {
+//                SRS_LOGE("srs_rtmp_write_packet fail:%d ", ret);
+//            }
+//        }
 //        srs_h264_write_raw_frames(srs_rtmp,node_p->data,node_p->size,node_p->time,node_p->time);
-        free(node_p);
+//        free(node_p);
     }
 }
 
@@ -133,6 +146,12 @@ void set_height(double height) {
 void set_audiodatarate(double audiodatarate) {
     if (media_config_p) {
         media_config_p->audiodatarate = audiodatarate;
+    }
+}
+
+void set_audiochannel(int32_t channel) {
+    if (media_config_p) {
+        media_config_p->channel_count = channel;
     }
 }
 

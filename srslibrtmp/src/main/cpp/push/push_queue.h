@@ -11,6 +11,10 @@
 #include <string.h>
 #include <pthread.h>
 
+#define NODE_TYPE_AUDIO 1
+
+#define  NODE_TYPE_VIDEO 2
+
 #define QUEUW_LENGTH 50
 /**
  * sps\pps
@@ -29,6 +33,7 @@ typedef struct node {
     //数据
     char *data;
     int32_t size;
+    int32_t flag;
     int32_t type;
     uint32_t time;
     struct node *next;
@@ -74,8 +79,9 @@ void cancel_queue();
  * 创建节点
  * @param data
  * @param size
+ * @param flag
  * @return
  */
-q_node_p create_node(char *data, int32_t size, int32_t type, uint32_t time);
+q_node_p create_node(char *data, int32_t size, int32_t type, int32_t flag, uint32_t time);
 
 #endif //LIBRTMP_PUSH_QUEUE_H

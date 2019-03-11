@@ -21,6 +21,7 @@ typedef struct mediaConfig {
     double audiodatarate;
     double audiosamplerate;
     double audiosamplesize;
+    int32_t channel_count;
 } media_config;
 
 int init_srs(const char *url);
@@ -36,10 +37,19 @@ void rtmp_start(JavaVM *gVm);
 void rtmp_destroy();
 
 void set_framerate(double framerate);
+
 void set_videodatarate(double videodatarate);
+
 void set_width(double width);
+
 void set_height(double height);
+
 void set_audiodatarate(double audiodatarate);
+
+void set_audiochannel(int32_t);
+
 void set_audiosamplerate(double audiosamplerate);
+
 void set_audiosamplesize(double audiosamplesize);
+
 #endif //LIBRTMP_PUSH_RTMP_H
