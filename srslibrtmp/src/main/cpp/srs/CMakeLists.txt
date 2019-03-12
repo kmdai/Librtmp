@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.4.1)
-
+project(SRS)
 set(core
         core/srs_core_autofree.cpp
         core/srs_core_mem_watch.cpp
@@ -60,7 +60,7 @@ add_library(srsrtmp STATIC ${srs-librtmp})
 
 target_include_directories(srsrtmp
         PRIVATE core kernel libs protocol
-        PUBLIC include)
+        PUBLIC libs)
 
 find_library(lib-log log)
 target_link_libraries(srsrtmp ${lib-log})

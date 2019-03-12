@@ -5,7 +5,7 @@
 #ifndef LIBRTMP_PUSH_RTMP_H
 #define LIBRTMP_PUSH_RTMP_H
 
-#include "../srs/include/srsrtmp.h"
+#include "srs_librtmp.hpp"
 #include "push_queue.h"
 #include <jni.h>
 #include <pthread.h>

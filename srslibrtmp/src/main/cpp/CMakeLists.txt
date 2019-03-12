@@ -4,17 +4,13 @@ add_subdirectory(srs)
 
 set(push
         push/push_rtmp.c
-        push/push_rtmp.h
         push/push_native.c
-        push/push_queue.h
         push/push_queue.c
-        push/push_flvenc.h
         push/push_flvenc.c)
 
 set(media
-        media/MediaEncoder.cpp
-        media/MediaEncoder.h)
+        media/MediaEncoder.cpp)
 
 add_library(srsPush SHARED ${push} ${media})
-#target_include_directories(srsPush PRIVATE srs/include)
+target_include_directories(srsPush PRIVATE push media)
 target_link_libraries(srsPush srsrtmp mediandk)
