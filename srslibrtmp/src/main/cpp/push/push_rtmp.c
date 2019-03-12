@@ -110,7 +110,7 @@ void *push_data(void *gVm) {
 //            }
 //        }
 //        srs_h264_write_raw_frames(srs_rtmp,node_p->data,node_p->size,node_p->time,node_p->time);
-//        free(node_p);
+        free(node_p);
     }
 }
 

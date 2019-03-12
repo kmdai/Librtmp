@@ -157,12 +157,16 @@ public class MediaEncoder {
                     return;
                 }
                 byte[] data = new byte[mMiniAudioBufferSize];
-                mAudioRecord.read(data, 0, data.length);
-                PCM pcm = new PCM();
-                pcm.data = data;
-                pcm.time = PCM.currentTime();
+                int length = mAudioRecord.read(data, 0, data.length);
+                if (length != AudioRecord.ERROR_BAD_VALUE &&
+                        length != AudioRecord.ERROR_INVALID_OPERATION &&
+                        length == mMiniAudioBufferSize) {
+                    PCM pcm = new PCM();
+                    pcm.data = data;
+                    pcm.time = PCM.currentTime();
 //                mPCMS.offer(pcm);
-                addPCM(pcm);
+                    addPCM(pcm);
+                }
             }
         }
     }
@@ -197,7 +201,7 @@ public class MediaEncoder {
                     ByteBuffer inputBuffer = mAudioCodec.getInputBuffer(inputId);
                     inputBuffer.clear();
                     inputBuffer.put(pcm.data, 0, pcm.data.length);
-                    mAudioCodec.queueInputBuffer(inputId, 0, pcm.data.length, System.nanoTime(), 0);
+                    mAudioCodec.queueInputBuffer(inputId, 0, pcm.data.length, pcm.time, 0);
                 }
                 int outputBufferId = mAudioCodec.dequeueOutputBuffer(bufferInfo, TIMEOUT_US);
                 if (outputBufferId >= 0) {
@@ -213,8 +217,8 @@ public class MediaEncoder {
 //                            Log.d("RecordDecodec---", "BUFFER_FLAG_CODEC_CONFIG");
                             mSRSLibrtmpManager.addFrame(outData, outData.length, SRSLibrtmpManager.NODE_TYPE_AUDIO, bufferInfo.flags, 0);
                         } else {
-//                            Log.d("RecordDecodec---", "other--bufferInfo.offset:" +bufferInfo.offset+ "bufferInfo.size:" + bufferInfo.size + "bufferInfo.time:" + bufferInfo.presentationTimeUs / 1000 + "--outData.length:" + outData.length + "--audioTimeIndex:" + audioTimeIndex);
-                            mSRSLibrtmpManager.addFrame(outData, outData.length, SRSLibrtmpManager.NODE_TYPE_AUDIO, bufferInfo.flags, getTimeIndex());
+                            Log.d("RecordDecodec---", "other--bufferInfo.offset:" + bufferInfo.offset + "bufferInfo.size:" + bufferInfo.size + "bufferInfo.time:" + bufferInfo.presentationTimeUs / 1000 + "--outData.length:" + outData.length + "--audioTimeIndex:" + audioTimeIndex);
+                            mSRSLibrtmpManager.addFrame(outData, outData.length, SRSLibrtmpManager.NODE_TYPE_AUDIO, bufferInfo.flags, audioTimeIndex);
                         }
                         outputBuffer.clear();
                     }
@@ -223,6 +227,7 @@ public class MediaEncoder {
             }
         }
     }
+
     /**
      * 添加ADTS头
      *
@@ -243,24 +248,6 @@ public class MediaEncoder {
         packet[5] = (byte) (((packetLen & 7) << 5) + 0x1F);
         packet[6] = (byte) 0xFC;
     }
-//    /**
-//     * 给编码出的aac裸流添加adts头字段
-//     *
-//     * @param packet    要空出前7个字节，否则会搞乱数据
-//     * @param packetLen
-//     */
-//    private void addADTStoPacket(byte[] packet, int packetLen) {
-//        int profile = 2;  //AAC LC
-//        int freqIdx = 4;  //44.1KHz
-//        int chanCfg = 1;  //CPE
-//        packet[0] = (byte) 0xFF;
-//        packet[1] = (byte) 0xF9;
-//        packet[2] = (byte) (((profile - 1) << 6) + (freqIdx << 2) + (chanCfg >> 2));
-//        packet[3] = (byte) (((chanCfg & 3) << 6) + (packetLen >> 11));
-//        packet[4] = (byte) ((packetLen & 0x7FF) >> 3);
-//        packet[5] = (byte) (((packetLen & 7) << 5) + 0x1F);
-//        packet[6] = (byte) 0xFC;
-//    }
 
     public class RecordDecodec implements Runnable {
 
@@ -357,7 +344,6 @@ public class MediaEncoder {
                         byte[] outData = new byte[bufferInfo.size];
                         outputBuffer.get(outData, bufferInfo.offset, bufferInfo.size);
                         calcTotalTime(bufferInfo.presentationTimeUs / 1000);
-//                    Log.d("----","offset--"+bufferInfo.offset);
                         if (bufferInfo.flags == BUFFER_FLAG_CODEC_CONFIG) {
                             mSRSLibrtmpManager.addFrame(outData, outData.length, SRSLibrtmpManager.NODE_TYPE_VIDEO, bufferInfo.flags, 0);
 //                        mLibrtmpManager.setSpsPps(outData, outData.length);
@@ -423,11 +409,11 @@ public class MediaEncoder {
         static long timeStart;
 
         public static void timeReset() {
-            timeStart = System.currentTimeMillis() ;
+            timeStart = System.nanoTime();
         }
 
         public static long currentTime() {
-            return System.currentTimeMillis()  - timeStart;
+            return (System.nanoTime() - timeStart) / 1000;
         }
     }
 }

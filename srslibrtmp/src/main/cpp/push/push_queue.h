@@ -15,7 +15,10 @@
 
 #define  NODE_TYPE_VIDEO 2
 
-#define QUEUW_LENGTH 50
+/**
+ *
+ */
+#define QUEUE_MAX_LENGTH (1024 * 1024)
 /**
  * sps\pps
  */
@@ -44,6 +47,7 @@ typedef struct list {
     q_node_p rear;
     pthread_mutex_t mutex;
     pthread_cond_t cond;
+    int32_t length;
 } q_list;
 
 

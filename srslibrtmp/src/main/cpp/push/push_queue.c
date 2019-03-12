@@ -15,6 +15,7 @@ int init_queue() {
         queue->rear = NULL;
         pthread_mutex_init(&queue->mutex, NULL);
         pthread_cond_init(&queue->cond, NULL);
+        queue->length = 0;
         return 0;
     }
     return 1;
@@ -31,21 +32,37 @@ int empty_queue() {
     }
 }
 
+void check_length() {
+    if (queue->length >= QUEUE_MAX_LENGTH) {
+        q_node_p node = queue->front;
+        while (node->type == NODE_TYPE_VIDEO && node->flag == NODE_FLAG_KEY_FRAME ||
+               queue->length <= 0) {
+            queue->front = node->next;
+            queue->length -= node->size;
+            free(node);
+            node = queue->front;
+        }
+    }
+}
+
 int in_queue(q_node_p node) {
     if (queue) {
         pthread_mutex_lock(&queue->mutex);
         if (queue->front == NULL && queue->rear == NULL) {
             queue->front = queue->rear = node;
         } else {
+            check_length();
             queue->rear->next = node;
             queue->rear = node;
         }
+        queue->length += node->size;
         pthread_cond_signal(&queue->cond);
         pthread_mutex_unlock(&queue->mutex);
         return 0;
     }
     return 1;
 }
+
 
 q_node_p out_queue() {
     q_node_p node = NULL;
@@ -64,6 +81,7 @@ q_node_p out_queue() {
         if (queue->front == NULL) {
             queue->rear = NULL;
         }
+        queue->length -= node->size;
         pthread_mutex_unlock(&queue->mutex);
     }
     return node;
@@ -80,6 +98,7 @@ int destroy_queue() {
     if (queue->front != NULL) {
         q_node_p node = queue->front;
         while (node) {
+            queue->length -= node->size;
             free(node);
             queue->front = queue->front->next;
             node = queue->front;
