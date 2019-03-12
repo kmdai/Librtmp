@@ -59,7 +59,7 @@ set(srs-librtmp
 add_library(srsrtmp STATIC ${srs-librtmp})
 
 target_include_directories(srsrtmp
-        PRIVATE core kernel libs protocol
+        PRIVATE core kernel protocol
         PUBLIC libs)
 
 find_library(lib-log log)

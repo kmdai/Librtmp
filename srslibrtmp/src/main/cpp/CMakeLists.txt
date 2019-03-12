@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.4.1)
 
 add_subdirectory(srs)
-
+add_subdirectory(oboe)
 set(push
         push/push_rtmp.c
         push/push_native.c
@@ -13,4 +13,4 @@ set(media
 
 add_library(srsPush SHARED ${push} ${media})
 target_include_directories(srsPush PRIVATE push media)
-target_link_libraries(srsPush srsrtmp mediandk)
+target_link_libraries(srsPush srsrtmp mediandk oboe)
