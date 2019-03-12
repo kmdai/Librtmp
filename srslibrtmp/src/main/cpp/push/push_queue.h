@@ -20,7 +20,7 @@
  */
 #define QUEUE_MAX_LENGTH (1024 * 1024)
 /**
- * sps\pps
+ * sps|pps|aac
  */
 #define NODE_FLAG_CODEC_CONFIG 2
 /**

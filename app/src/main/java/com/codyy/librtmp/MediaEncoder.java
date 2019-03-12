@@ -188,8 +188,8 @@ public class MediaEncoder {
                     if (mIsStop.get()) {
                         mLock.unlock();
                         mAudioRecord.stop();
-                        mAudioCodec.stop();
-                        mAudioCodec.release();
+//                        mAudioCodec.stop();
+//                        mAudioCodec.release();
                         Log.d("---", "mAudioRecord:release");
                         return;
                     }
@@ -203,27 +203,27 @@ public class MediaEncoder {
                     inputBuffer.put(pcm.data, 0, pcm.data.length);
                     mAudioCodec.queueInputBuffer(inputId, 0, pcm.data.length, pcm.time, 0);
                 }
-                int outputBufferId = mAudioCodec.dequeueOutputBuffer(bufferInfo, TIMEOUT_US);
-                if (outputBufferId >= 0) {
-                    ByteBuffer outputBuffer = mAudioCodec.getOutputBuffer(outputBufferId);
-                    if (outputBuffer != null) {
-                        outputBuffer.position(bufferInfo.offset);
-                        outputBuffer.limit(bufferInfo.offset + bufferInfo.size);
-                        byte[] outData = new byte[bufferInfo.size + 7];
-                        addADTStoPacket(outData, outData.length);
-                        outputBuffer.get(outData, bufferInfo.offset + 7, bufferInfo.size);
-                        calcTotalAudioTime(bufferInfo.presentationTimeUs / 1000);
-                        if (bufferInfo.flags == BUFFER_FLAG_CODEC_CONFIG) {
-//                            Log.d("RecordDecodec---", "BUFFER_FLAG_CODEC_CONFIG");
-                            mSRSLibrtmpManager.addFrame(outData, outData.length, SRSLibrtmpManager.NODE_TYPE_AUDIO, bufferInfo.flags, 0);
-                        } else {
-                            Log.d("RecordDecodec---", "other--bufferInfo.offset:" + bufferInfo.offset + "bufferInfo.size:" + bufferInfo.size + "bufferInfo.time:" + bufferInfo.presentationTimeUs / 1000 + "--outData.length:" + outData.length + "--audioTimeIndex:" + audioTimeIndex);
-                            mSRSLibrtmpManager.addFrame(outData, outData.length, SRSLibrtmpManager.NODE_TYPE_AUDIO, bufferInfo.flags, audioTimeIndex);
-                        }
-                        outputBuffer.clear();
-                    }
-                    mAudioCodec.releaseOutputBuffer(outputBufferId, false);
-                }
+//                int outputBufferId = mAudioCodec.dequeueOutputBuffer(bufferInfo, TIMEOUT_US);
+//                if (outputBufferId >= 0) {
+//                    ByteBuffer outputBuffer = mAudioCodec.getOutputBuffer(outputBufferId);
+//                    if (outputBuffer != null) {
+//                        outputBuffer.position(bufferInfo.offset);
+//                        outputBuffer.limit(bufferInfo.offset + bufferInfo.size);
+//                        byte[] outData = new byte[bufferInfo.size + 7];
+//                        addADTStoPacket(outData, outData.length);
+//                        outputBuffer.get(outData, bufferInfo.offset + 7, bufferInfo.size);
+//                        calcTotalAudioTime(bufferInfo.presentationTimeUs / 1000);
+//                        if (bufferInfo.flags == BUFFER_FLAG_CODEC_CONFIG) {
+////                            Log.d("RecordDecodec---", "BUFFER_FLAG_CODEC_CONFIG");
+//                            mSRSLibrtmpManager.addFrame(outData, outData.length, SRSLibrtmpManager.NODE_TYPE_AUDIO, bufferInfo.flags, 0);
+//                        } else {
+//                            Log.d("RecordDecodec---", "other--bufferInfo.offset:" + bufferInfo.offset + "bufferInfo.size:" + bufferInfo.size + "bufferInfo.time:" + bufferInfo.presentationTimeUs / 1000 + "--outData.length:" + outData.length + "--audioTimeIndex:" + audioTimeIndex);
+//                            mSRSLibrtmpManager.addFrame(outData, outData.length, SRSLibrtmpManager.NODE_TYPE_AUDIO, bufferInfo.flags, audioTimeIndex);
+//                        }
+//                        outputBuffer.clear();
+//                    }
+//                    mAudioCodec.releaseOutputBuffer(outputBufferId, false);
+//                }
             }
         }
     }
@@ -265,14 +265,14 @@ public class MediaEncoder {
                         outputBuffer.position(bufferInfo.offset);
                         outputBuffer.limit(bufferInfo.offset + bufferInfo.size);
                         byte[] outData = new byte[bufferInfo.size + 7];
-                        addADTStoPacket(outData, bufferInfo.size);
+                        addADTStoPacket(outData, outData.length);
                         outputBuffer.get(outData, bufferInfo.offset + 7, bufferInfo.size);
                         calcTotalAudioTime(bufferInfo.presentationTimeUs / 1000);
                         if (bufferInfo.flags == BUFFER_FLAG_CODEC_CONFIG) {
-                            Log.d("RecordDecodec---", "BUFFER_FLAG_CODEC_CONFIG");
+//                            Log.d("RecordDecodec---", "BUFFER_FLAG_CODEC_CONFIG");
                             mSRSLibrtmpManager.addFrame(outData, outData.length, SRSLibrtmpManager.NODE_TYPE_AUDIO, bufferInfo.flags, 0);
                         } else {
-                            Log.d("RecordDecodec---", "other" + "bufferInfo.size:" + bufferInfo.size + "bufferInfo.time:" + bufferInfo.presentationTimeUs / 1000 + "--outData.length:" + outData.length + "--audioTimeIndex:" + audioTimeIndex);
+//                            Log.d("RecordDecodec---", "other" + "bufferInfo.size:" + bufferInfo.size + "bufferInfo.time:" + bufferInfo.presentationTimeUs / 1000 + "--outData.length:" + outData.length + "--audioTimeIndex:" + audioTimeIndex);
                             mSRSLibrtmpManager.addFrame(outData, outData.length, SRSLibrtmpManager.NODE_TYPE_AUDIO, bufferInfo.flags, audioTimeIndex);
                         }
                         outputBuffer.clear();
@@ -309,7 +309,7 @@ public class MediaEncoder {
         new Thread(new SendRunable()).start();
         new Thread(new RecordRunnable()).start();
         new Thread(new RecordEncodec()).start();
-//        new Thread(new RecordDecodec()).start();
+        new Thread(new RecordDecodec()).start();
     }
 
     public class SendRunable implements Runnable {
