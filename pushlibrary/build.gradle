@@ -3,21 +3,21 @@ apply plugin: 'com.android.library'
 android {
     compileSdkVersion 26
     defaultConfig {
-        minSdkVersion 19
+        minSdkVersion 21
         targetSdkVersion 26
         versionCode 1
         versionName "1.0"
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
         externalNativeBuild {
             cmake {
+//                abiFilters 'armeabi-v7a', 'x86', 'arm64-v8a'
                 cppFlags "-frtti -fexceptions"
                 arguments "-DCMAKE_BUILD_TYPE:String=Debug"
+//                ,'-DCMAKE_LIBRARY_OUTPUT_DIRECTORY=/home/kmdai/mnt/openSource/Librtmp/pushlibrary/src/main/jniLibs/${ANDROID_ABI}'
             }
-        }
-        ndk {
-            // Specifies the ABI configurations of your native
-            // libraries Gradle should build and package with your APK.
-            abiFilters 'armeabi-v7a', 'x86'
+            ndk {
+                abiFilters 'armeabi-v7a'
+            }
         }
     }
 
@@ -30,11 +30,12 @@ android {
     externalNativeBuild {
         cmake {
             path "src/main/cpp/CMakeLists.txt"
+//            buildStagingDirectory "src/main/jniLibs"
         }
     }
     sourceSets {
         main {
-            jniLibs.srcDirs = ['jniLibs']
+//            jniLibs.srcDirs = []
         }
     }
 }

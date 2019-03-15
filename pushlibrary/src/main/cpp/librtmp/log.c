@@ -26,6 +26,7 @@
 #include <string.h>
 #include <assert.h>
 #include <ctype.h>
+#include "android/log.h"
 
 #include "rtmp_sys.h"
 #include "log.h"
@@ -97,6 +98,7 @@ void RTMP_Log(int level, const char *format, ...)
 		return;
 
 	va_start(args, format);
+	__android_log_vprint(ANDROID_LOG_VERBOSE,"-----",format,args);
 	cb(level, format, args);
 	va_end(args);
 }
