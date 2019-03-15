@@ -10,7 +10,7 @@
 #include <malloc.h>
 #include <string.h>
 #include <pthread.h>
-
+#include "push_utils.h"
 #define NODE_TYPE_AUDIO 1
 
 #define  NODE_TYPE_VIDEO 2
@@ -18,7 +18,7 @@
 /**
  *
  */
-#define QUEUE_MAX_LENGTH (1024 * 1024)
+#define QUEUE_MAX_LENGTH (1024 * 1024 * 4)
 /**
  * sps|pps|aac
  */
@@ -35,7 +35,7 @@
 typedef struct node {
     //数据
     char *data;
-    int32_t size;
+    uint32_t size;
     int32_t flag;
     int32_t type;
     uint32_t time;
@@ -86,6 +86,6 @@ void cancel_queue();
  * @param flag
  * @return
  */
-q_node_p create_node(char *data, int32_t size, int32_t type, int32_t flag, uint32_t time);
+q_node_p create_node(char *data, uint32_t size, int32_t type, int32_t flag, uint32_t time);
 
 #endif //LIBRTMP_PUSH_QUEUE_H

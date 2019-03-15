@@ -29,6 +29,8 @@
 #define RTMP_AMF0_AVMplusObject             0x11
 // origin array whos data takes the same form as LengthValueBytes
 #define RTMP_AMF0_OriginStrictArray         0x20
+
+#define ADTS_HEADER_SIZE 7
 int prefix;
 
 char *put_byte(char *out, uint8_t val) {
@@ -217,7 +219,7 @@ int create_AVCVideoPacket(char **data, char *sps_pps, int size) {
 
 int create_VideoPacket(char **data, char *nalu, int type, int size, int time) {
     int nalu_size = size - prefix;
-    *data = (char *) malloc(nalu_size + 9);
+    (*data) = (char *) malloc(nalu_size + 9);
     char *body = *data;
     int i = 0;
     int key = nalu[prefix] & 0x1f;
@@ -245,4 +247,36 @@ int create_VideoPacket(char **data, char *nalu, int type, int size, int time) {
     i += nalu_size;
 //    SRS_LOGE("---create_VideoPacket size=%d", i);
     return i;
+}
+
+
+char *add_aac_adts(char *data, unsigned int size) {
+    unsigned int adts_size = size + ADTS_HEADER_SIZE;
+    char *adts_data = (char *) malloc(adts_size);
+    memcpy(adts_data + ADTS_HEADER_SIZE, data, size);
+//    addADTStoPacket(adts_data, adts_size);
+    PutBitContext pb;
+    init_put_bits(&pb, adts_data, ADTS_HEADER_SIZE);
+
+    /* adts_fixed_header */
+    put_bits(&pb, 12, 0xfff);   /* syncword */
+    put_bits(&pb, 1, 1);        /* ID */
+    put_bits(&pb, 2, 0);        /* layer */
+    put_bits(&pb, 1, 1);        /* protection_absent */
+    put_bits(&pb, 2, 2);        /* profile_objecttype */
+    put_bits(&pb, 4, 4);
+    put_bits(&pb, 1, 0);        /* private_bit */
+    put_bits(&pb, 3, 1);        /* channel_configuration */
+    put_bits(&pb, 1, 0);        /* original_copy */
+    put_bits(&pb, 1, 0);        /* home */
+
+    /* adts_variable_header */
+    put_bits(&pb, 1, 0);        /* copyright_identification_bit */
+    put_bits(&pb, 1, 0);        /* copyright_identification_start */
+    put_bits(&pb, 13, adts_size); /* aac_frame_length */
+    put_bits(&pb, 11, 0x7ff);   /* adts_buffer_fullness */
+    put_bits(&pb, 2, 0);        /* number_of_raw_data_blocks_in_frame */
+
+    flush_put_bits(&pb);
+    return adts_data;
 }

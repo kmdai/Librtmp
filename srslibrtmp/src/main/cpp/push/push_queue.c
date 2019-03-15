@@ -35,13 +35,15 @@ int empty_queue() {
 void check_length() {
     if (queue->length >= QUEUE_MAX_LENGTH) {
         q_node_p node = queue->front;
-        while (node->type == NODE_TYPE_VIDEO && node->flag == NODE_FLAG_KEY_FRAME ||
-               queue->length <= 0) {
+        int before = queue->length;
+        while (node->flag != NODE_FLAG_KEY_FRAME ||
+               queue->length >= QUEUE_MAX_LENGTH) {
             queue->front = node->next;
             queue->length -= node->size;
             free(node);
             node = queue->front;
         }
+        SRS_LOGE("free queue before%d,ofter:%d", before, queue->length);
     }
 }
 
@@ -114,7 +116,7 @@ int destroy_queue() {
     return 0;
 }
 
-q_node_p create_node(char *data, int32_t size, int32_t type, int32_t flag, uint32_t time) {
+q_node_p create_node(char *data, uint32_t size, int32_t type, int32_t flag, uint32_t time) {
     q_node_p node = (q_node_p) malloc(sizeof(q_node) + size);
     node->data = (char *) node + sizeof(q_node);
     memcpy(node->data, data, size);

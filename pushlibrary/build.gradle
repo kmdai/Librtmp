@@ -15,9 +15,6 @@ android {
                 arguments "-DCMAKE_BUILD_TYPE:String=Debug"
 //                ,'-DCMAKE_LIBRARY_OUTPUT_DIRECTORY=/home/kmdai/mnt/openSource/Librtmp/pushlibrary/src/main/jniLibs/${ANDROID_ABI}'
             }
-            ndk {
-                abiFilters 'armeabi-v7a'
-            }
         }
     }
 

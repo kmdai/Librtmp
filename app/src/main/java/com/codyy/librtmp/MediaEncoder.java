@@ -7,27 +7,20 @@ import android.media.MediaCodecInfo;
 import android.media.MediaCodecList;
 import android.media.MediaFormat;
 import android.media.MediaRecorder;
-import android.os.Build;
 import android.text.TextUtils;
 import android.util.Log;
 import android.view.Surface;
-import android.widget.Toast;
 
-import com.kmdai.rtmppush.LibrtmpManager;
 import com.kmdai.srslibrtmp.SRSLibrtmpManager;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.LinkedList;
 import java.util.Queue;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Condition;
-import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
-import static android.media.AudioFormat.CHANNEL_IN_MONO;
 import static android.media.MediaCodec.BUFFER_FLAG_CODEC_CONFIG;
 
 
@@ -86,12 +79,13 @@ public class MediaEncoder {
             Log.e("-------", "name is null");
             return;
         }
-
+//        mediaFormat.setInteger(MediaFormat.KEY_PROFILE, MediaCodecInfo.CodecProfileLevel.AVCProfileMain);
         mediaFormat.setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface);
         mediaFormat.setFloat(MediaFormat.KEY_FRAME_RATE, framerate);
         mediaFormat.setInteger(MediaFormat.KEY_BIT_RATE, bitrate);
-        mediaFormat.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1);
+        mediaFormat.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 3);
         mediaFormat.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 0);
+
         try {
             mVideoMediaCodec = MediaCodec.createByCodecName(name);
 //            mVideoMediaCodec=MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC);
@@ -263,9 +257,9 @@ public class MediaEncoder {
                     if (outputBuffer != null) {
                         outputBuffer.position(bufferInfo.offset);
                         outputBuffer.limit(bufferInfo.offset + bufferInfo.size);
-                        byte[] outData = new byte[bufferInfo.size + 7];
-                        addADTStoPacket(outData, outData.length);
-                        outputBuffer.get(outData, bufferInfo.offset + 7, bufferInfo.size);
+                        byte[] outData = new byte[bufferInfo.size ];
+//                        addADTStoPacket(outData, outData.length);
+                        outputBuffer.get(outData, bufferInfo.offset , bufferInfo.size);
                         calcTotalAudioTime(bufferInfo.presentationTimeUs / 1000);
                         if (bufferInfo.flags == BUFFER_FLAG_CODEC_CONFIG) {
 //                            Log.d("RecordDecodec---", "BUFFER_FLAG_CODEC_CONFIG");

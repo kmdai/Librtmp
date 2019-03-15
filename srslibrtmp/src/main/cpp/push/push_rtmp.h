@@ -9,9 +9,8 @@
 #include "push_queue.h"
 #include <jni.h>
 #include <pthread.h>
-#include <android/log.h>
+#include "push_utils.h"
 
-#define SRS_LOGE(...) ((void)__android_log_print(ANDROID_LOG_ERROR, "push", __VA_ARGS__))
 
 typedef struct mediaConfig {
     double framerate;

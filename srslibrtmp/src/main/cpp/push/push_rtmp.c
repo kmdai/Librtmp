@@ -5,6 +5,7 @@
 #include <jni.h>
 #include "push_rtmp.h"
 #include "push_flvenc.h"
+#include <sys/prctl.h>
 
 srs_rtmp_t srs_rtmp;
 media_config *media_config_p;
@@ -50,9 +51,19 @@ void add_frame(char *data, int32_t size, int32_t type, uint32_t time) {
 //    in_queue(node_p);
 }
 
+//void push_head(q_node_p node){
+//    int i=0;
+//    while(i<5){
+//        if(srs_audio_write_raw_frame()){
+//
+//        }
+//        i++;
+//    }
+//}
 void *push_data(void *gVm) {
     JavaVM *gvm = (JavaVM *) gVm;
     JNIEnv *env = NULL;
+    prctl(PR_SET_NAME,"rtmp push data");
     if (0 != (*gvm)->AttachCurrentThread(gVm, &env, NULL)) {
         return (void *) 0;
     }
@@ -66,14 +77,17 @@ void *push_data(void *gVm) {
             return (void *) 1;
         }
         if (node_p->type == NODE_TYPE_AUDIO) {
-          if( srs_audio_write_raw_frame(srs_rtmp,
-                                      10,
-                                      3,
-                                      1,
-                                      0,
-                                      node_p->data, node_p->size, node_p->time)!=0){
-              SRS_LOGE("srs_audio_write_raw_frame error");
-          }
+            char *adts_data = add_aac_adts(node_p->data, node_p->size);
+
+            if ((ret = srs_audio_write_raw_frame(srs_rtmp,
+                                                 10,
+                                                 3,
+                                                 1,
+                                                 0,
+                                                 adts_data, node_p->size + 7, node_p->time)) != 0) {
+                SRS_LOGE("srs_audio_write_raw_frame error%d", ret);
+            }
+            free(adts_data);
         } else if (node_p->type == NODE_TYPE_VIDEO) {
             srs_h264_write_raw_frames(srs_rtmp, node_p->data, node_p->size, node_p->time,
                                       node_p->time);
@@ -117,6 +131,7 @@ void *push_data(void *gVm) {
 void rtmp_start(JavaVM *gVm) {
     pthread_t pthread;
     int result = pthread_create(&pthread, NULL, push_data, gVm);
+    pthread_setname_np(pthread,"rtmp push data");
 }
 
 void set_framerate(double framerate) {
