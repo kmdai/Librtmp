@@ -44,7 +44,7 @@ public class MediaEncoder {
     private final int AUDIO_CHANNEL_COUNT = 1;
     AtomicBoolean mIsStop;
     //    private LibrtmpManager mLibrtmpManager;
-    private String mRtmpUrl = "rtmp://10.23.164.27:1935/srs/kmdai";
+    private String mRtmpUrl = "rtmp://10.23.164.30:1935/srs/kmdai";
     //                RTMPMuxer mRTMPMuxer;
     long indexTime = 0;
     private SRSLibrtmpManager mSRSLibrtmpManager;

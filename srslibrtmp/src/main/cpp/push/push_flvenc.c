@@ -253,6 +253,7 @@ int create_VideoPacket(char **data, char *nalu, int type, int size, int time) {
 char *add_aac_adts(char *data, unsigned int size) {
     unsigned int adts_size = size + ADTS_HEADER_SIZE;
     char *adts_data = (char *) malloc(adts_size);
+    memset(adts_data, 0, adts_size);
     memcpy(adts_data + ADTS_HEADER_SIZE, data, size);
 //    addADTStoPacket(adts_data, adts_size);
     PutBitContext pb;
@@ -260,10 +261,10 @@ char *add_aac_adts(char *data, unsigned int size) {
 
     /* adts_fixed_header */
     put_bits(&pb, 12, 0xfff);   /* syncword */
-    put_bits(&pb, 1, 1);        /* ID */
+    put_bits(&pb, 1, 0);        /* ID  0标识MPEG-4，1标识MPEG-2*/
     put_bits(&pb, 2, 0);        /* layer */
     put_bits(&pb, 1, 1);        /* protection_absent */
-    put_bits(&pb, 2, 2);        /* profile_objecttype */
+    put_bits(&pb, 2, 2 - 1);        /* profile_objecttype */
     put_bits(&pb, 4, 4);
     put_bits(&pb, 1, 0);        /* private_bit */
     put_bits(&pb, 3, 1);        /* channel_configuration */

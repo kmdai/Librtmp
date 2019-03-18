@@ -12,10 +12,10 @@
 
 #define AV_WB32(p, val) do {                 \
         uint32_t d = (val);                  \
-        ((uint8_t*)(p))[3] = (d)&0xff;            \
-        ((uint8_t*)(p))[2] = (d)>>8&0xff;         \
-        ((uint8_t*)(p))[1] = (d)>>16&0xff;        \
-        ((uint8_t*)(p))[0] = (d)>>24&0xff;        \
+        ((uint8_t*)(p))[3] = (d);            \
+        ((uint8_t*)(p))[2] = (d)>>8;         \
+        ((uint8_t*)(p))[1] = (d)>>16;        \
+        ((uint8_t*)(p))[0] = (d)>>24;        \
     } while(0)
 
 
@@ -43,7 +43,7 @@ static inline void init_put_bits(PutBitContext *s, uint8_t *buffer,
     s->buf = buffer;
     s->buf_end = s->buf + buffer_size;
     s->buf_ptr = s->buf;
-    s->bit_left = sizeof(uint32_t);
+    s->bit_left = 32;
     s->bit_buf = 0;
 }
 
@@ -63,11 +63,7 @@ static inline void put_bits(PutBitContext *s, int n, unsigned int value) {
         bit_buf <<= bit_left;
         bit_buf |= value >> (n - bit_left);
         if (3 < s->buf_end - s->buf_ptr) {
-            s->buf_ptr[3] = (uint8_t) (bit_buf & 0xff);
-            s->buf_ptr[2] = (uint8_t) (bit_buf >> 8 & 0xff);
-            s->buf_ptr[1] = (uint8_t) (bit_buf >> 16 & 0xff);
-            s->buf_ptr[0] = (uint8_t) (bit_buf >> 24 & 0xff);
-//            AV_WB32(s->buf_ptr, bit_buf);
+            AV_WB32(s->buf_ptr, bit_buf);
             s->buf_ptr += 4;
         }
         bit_left += 32 - n;
@@ -75,6 +71,7 @@ static inline void put_bits(PutBitContext *s, int n, unsigned int value) {
     }
     s->bit_buf = bit_buf;
     s->bit_left = bit_left;
+    s->size_in_bits -= n;
 }
 
 
@@ -86,7 +83,7 @@ static inline void flush_put_bits(PutBitContext *s) {
         s->bit_buf <<= s->bit_left;
     }
     while (s->bit_left < 32) {
-        *s->buf_ptr++ = (uint8_t) s->bit_buf >> 24;
+        *s->buf_ptr++ = s->bit_buf >> 24;
         s->bit_buf <<= 8;
         s->bit_left += 8;
     }
