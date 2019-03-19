@@ -1,41 +1,39 @@
-/*
-The MIT License (MIT)
-
-Copyright (c) 2013-2015 SRS(ossrs)
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of
-this software and associated documentation files (the "Software"), to deal in
-the Software without restriction, including without limitation the rights to
-use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
-the Software, and to permit persons to whom the Software is furnished to do so,
-subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
-FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
-COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
-IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
-CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-*/
+/**
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2013-2019 Winlin
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of
+ * this software and associated documentation files (the "Software"), to deal in
+ * the Software without restriction, including without limitation the rights to
+ * use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+ * the Software, and to permit persons to whom the Software is furnished to do so,
+ * subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+ * FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+ * COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+ * IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+ * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ */
 
 #ifndef SRS_PROTOCOL_KBPS_HPP
 #define SRS_PROTOCOL_KBPS_HPP
 
-/*
-#include <srs_protocol_kbps.hpp>
-*/
-
 #include <srs_core.hpp>
 
-#include <srs_rtmp_io.hpp>
+#include <srs_protocol_io.hpp>
+
+class SrsWallClock;
 
 /**
-* a kbps sample, for example, 1minute kbps, 
-* 10minute kbps sample.
-*/
+ * a kbps sample, for example, the kbps at time,
+ * 10minute kbps sample.
+ */
 class SrsKbpsSample
 {
 public:
@@ -44,34 +42,34 @@ public:
     int kbps;
 public:
     SrsKbpsSample();
+    virtual ~SrsKbpsSample();
+public:
+    virtual SrsKbpsSample* update(int64_t b, int64_t t, int k);
 };
 
 /**
-* a slice of kbps statistic, for input or output.
-* a slice contains a set of sessions, which has a base offset of bytes,
-* where a slice is:
-*       starttime(oldest session startup time)
-*               bytes(total bytes of previous sessions)
-*               io_bytes_base(bytes offset of current session)
-*                       last_bytes(bytes of current session)
-* so, the total send bytes now is:
-*       send_bytes = bytes + last_bytes - io_bytes_base
-* so, the bytes sent duration current session is:
-*       send_bytes = last_bytes - io_bytes_base
-* @remark use set_io to start new session.
-* @remakr the slice is a data collection object driven by SrsKbps.
-*/
+ * a slice of kbps statistic, for input or output.
+ * a slice contains a set of sessions, which has a base offset of bytes,
+ * where a slice is:
+ *       starttime(oldest session startup time)
+ *               bytes(total bytes of previous sessions)
+ *               io_bytes_base(bytes offset of current session)
+ *                       last_bytes(bytes of current session)
+ * so, the total send bytes now is:
+ *       send_bytes = bytes + last_bytes - io_bytes_base
+ * so, the bytes sent duration current session is:
+ *       send_bytes = last_bytes - io_bytes_base
+ * @remark use set_io to start new session.
+ * @remakr the slice is a data collection object driven by SrsKbps.
+ */
 class SrsKbpsSlice
 {
 private:
-    union slice_io {
-        ISrsProtocolStatistic* in;
-        ISrsProtocolStatistic* out;
-    };
+    SrsWallClock* clk;
 public:
     // the slice io used for SrsKbps to invoke,
     // the SrsKbpsSlice itself never use it.
-    slice_io io;
+    ISrsProtocolStatistic* io;
     // session startup bytes
     // @remark, use total_bytes() to get the total bytes of slice.
     int64_t bytes;
@@ -92,42 +90,48 @@ public:
     // for the delta bytes.
     int64_t delta_bytes;
 public:
-    SrsKbpsSlice();
+    SrsKbpsSlice(SrsWallClock* clk);
     virtual ~SrsKbpsSlice();
 public:
-    // Get current total bytes, not depend on sample().
+    // Get current total bytes, it doesn't depend on sample().
     virtual int64_t get_total_bytes();
     // Resample the slice to calculate the kbps.
     virtual void sample();
 };
 
 /**
-* the interface which provices delta of bytes.
-* for a delta, for example, a live stream connection, we can got the delta by:
-*       IKbpsDelta* delta = ...;
-*       delta->resample();
-*       kbps->add_delta(delta);
-*       delta->cleanup();
-*/
-class IKbpsDelta
+ * the interface which provices delta of bytes.
+ * for a delta, for example, a live stream connection, we can got the delta by:
+ *       ISrsKbpsDelta* delta = ...;
+ *       int64_t in, out;
+ *       delta->remark(&in, &out);
+ *       kbps->add_delta(in, out);
+ */
+class ISrsKbpsDelta
 {
 public:
-    IKbpsDelta();
-    virtual ~IKbpsDelta();
+    ISrsKbpsDelta();
+    virtual ~ISrsKbpsDelta();
 public:
     /**
-    * resample to generate the value of delta bytes.
-    */
-    virtual void resample() = 0;
+     * resample to generate the value of delta bytes.
+     */
+    virtual void remark(int64_t* in, int64_t* out) = 0;
+};
+
+/**
+ * A time source to provide wall clock.
+ */
+class SrsWallClock
+{
+public:
+    SrsWallClock();
+    virtual ~SrsWallClock();
+public:
     /**
-    * get the send or recv bytes delta.
-    */
-    virtual int64_t get_send_bytes_delta() = 0;
-    virtual int64_t get_recv_bytes_delta() = 0;
-    /**
-    * cleanup the value of delta bytes.
-    */
-    virtual void cleanup() = 0;
+     * Current time in ms.
+     */
+    virtual int64_t time_ms();
 };
 
 /**
@@ -144,35 +148,37 @@ public:
  *       SrsKbps* kbps = ...;
  *       kbps->set_io(NULL, NULL)
  *       for each connection in connections:
- *           IKbpsDelta* delta = connection; // where connection implements IKbpsDelta
- *           delta->resample()
- *           kbps->add_delta(delta)
- *           delta->cleanup()
+ *           ISrsKbpsDelta* delta = connection; // where connection implements ISrsKbpsDelta
+ *           int64_t in, out;
+ *           delta->remark(&in, &out)
+ *           kbps->add_delta(in, out)
  *       kbps->sample()
  *       kbps->get_xxx_kbps().
- * 3. kbps used as IKbpsDelta, to provides delta bytes:
+ * 3. kbps used as ISrsKbpsDelta, to provides delta bytes:
  *      SrsKbps* kbps = ...;
  *      kbps->set_io(in, out);
- *      IKbpsDelta* delta = (IKbpsDelta*)kbps;
- *      delta->resample();
- *      printf("delta is %d/%d", delta->get_send_bytes_delta(), delta->get_recv_bytes_delta());
- *      delta->cleanup();
+ *      ISrsKbpsDelta* delta = (ISrsKbpsDelta*)kbps;
+ *      int64_t in, out;
+ *      delta->remark(&in, out);
+ *      printf("delta is %d/%d", in, out);
  * 4. kbps used as ISrsProtocolStatistic, to provides raw bytes:
  *      SrsKbps* kbps = ...;
  *      kbps->set_io(in, out);
  *      // both kbps->get_recv_bytes() and kbps->get_send_bytes() are available.
- *       // we can use the kbps as the data source of another kbps:
+ *      // we can use the kbps as the data source of another kbps:
  *      SrsKbps* user = ...;
  *      user->set_io(kbps, kbps);
  *   the server never know how many bytes already send/recv, for the connection maybe closed.
  */
-class SrsKbps : public virtual ISrsProtocolStatistic, public virtual IKbpsDelta
+class SrsKbps : virtual public ISrsProtocolStatistic, virtual public ISrsKbpsDelta
 {
 private:
     SrsKbpsSlice is;
     SrsKbpsSlice os;
+    SrsWallClock* clk;
 public:
-    SrsKbps();
+    // We won't free the clock c.
+    SrsKbps(SrsWallClock* c);
     virtual ~SrsKbps();
 public:
     /**
@@ -188,9 +194,9 @@ public:
     virtual void set_io(ISrsProtocolStatistic* in, ISrsProtocolStatistic* out);
 public:
     /**
-    * get total kbps, duration is from the startup of io.
-    * @remark, use sample() to update data.
-    */
+     * get total kbps, duration is from the startup of io.
+     * @remark, use sample() to update data.
+     */
     virtual int get_send_kbps();
     virtual int get_recv_kbps();
     // 30s
@@ -199,32 +205,29 @@ public:
     // 5m
     virtual int get_send_kbps_5m();
     virtual int get_recv_kbps_5m();
+public:
+    /**
+     * add delta to kbps clac mechenism.
+     * we donot know the total bytes, but know the delta, for instance,
+     * for rtmp server to calc total bytes and kbps.
+     * @remark user must invoke sample() to calc result after invoke this method.
+     * @param delta, assert should never be NULL.
+     */
+    virtual void add_delta(int64_t in, int64_t out);
+    /**
+     * resample all samples, ignore if in/out is NULL.
+     * used for user to calc the kbps, to sample new kbps value.
+     * @remark if user, for instance, the rtmp server to calc the total bytes,
+     *       use the add_delta() is better solutions.
+     */
+    virtual void sample();
 // interface ISrsProtocolStatistic
 public:
     virtual int64_t get_send_bytes();
     virtual int64_t get_recv_bytes();
-// interface IKbpsDelta
+// interface ISrsKbpsDelta
 public:
-    virtual void resample();
-    virtual int64_t get_send_bytes_delta();
-    virtual int64_t get_recv_bytes_delta();
-    virtual void cleanup();
-public:
-    /**
-    * add delta to kbps clac mechenism.
-    * we donot know the total bytes, but know the delta, for instance, 
-    * for rtmp server to calc total bytes and kbps.
-    * @remark user must invoke sample() to calc result after invoke this method.
-    * @param delta, assert should never be NULL.
-    */
-    virtual void add_delta(IKbpsDelta* delta);
-    /**
-    * resample all samples, ignore if in/out is NULL.
-    * used for user to calc the kbps, to sample new kbps value.
-    * @remark if user, for instance, the rtmp server to calc the total bytes,
-    *       use the add_delta() is better solutions.
-    */
-    virtual void sample();
+    virtual void remark(int64_t* in, int64_t* out);
 // interface ISrsMemorySizer
 public:
     virtual int size_memory();

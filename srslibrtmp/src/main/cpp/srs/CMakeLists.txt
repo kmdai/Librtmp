@@ -18,7 +18,10 @@ set(kernel
         kernel/srs_kernel_mp3.cpp
         kernel/srs_kernel_stream.cpp
         kernel/srs_kernel_ts.cpp
-        kernel/srs_kernel_utility.cpp)
+        kernel/srs_kernel_utility.cpp
+        kernel/srs_kernel_balance.cpp
+        kernel/srs_kernel_io.cpp
+        kernel/srs_kernel_mp4.cpp)
 
 set(libs
         libs/srs_lib_bandwidth.cpp
@@ -37,7 +40,13 @@ set(protocol
         protocol/srs_rtmp_msg_array.cpp
         protocol/srs_rtmp_stack.cpp
         protocol/srs_rtmp_utility.cpp
-        protocol/srs_rtsp_stack.cpp)
+        protocol/srs_rtsp_stack.cpp
+        protocol/srs_kafka_stack.cpp
+        protocol/srs_protocol_amf0.cpp
+        protocol/srs_protocol_format.cpp
+        protocol/srs_protocol_io.cpp
+        protocol/srs_protocol_stream.cpp
+        protocol/srs_protocol_utility.cpp)
 
 
 #根据不同的平台定义不同的宏

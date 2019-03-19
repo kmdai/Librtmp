@@ -2,44 +2,54 @@
 #ifndef SRS_AUTO_HEADER_HPP
 #define SRS_AUTO_HEADER_HPP
 
-#define SRS_AUTO_BUILD_TS "1524121595"
-#define SRS_AUTO_BUILD_DATE "2018-04-19 15:06:35"
-#define SRS_AUTO_UNAME "Linux kmdai-hp 4.13.0-38-generic #43~16.04.1-Ubuntu SMP Wed Mar 14 17:48:43 UTC 2018 x86_64 x86_64 x86_64 GNU/Linux"
-#define SRS_AUTO_USER_CONFIGURE "--x86-x64  --export-librtmp-project=/home/kmdai/srs-librtmp2"
-#define SRS_AUTO_CONFIGURE "--prefix=/usr/local/srs --without-hls --without-hds --without-dvr --without-nginx --without-ssl --without-ffmpeg --without-transcode --without-ingest --without-stat --without-http-callback --without-http-server --without-stream-caster --without-http-api --with-librtmp --with-research --without-utest --without-gperf --without-gmc --without-gmp --without-gcp --without-gprof --without-arm-ubuntu12 --without-mips-ubuntu12 --log-trace"
+#define SRS_AUTO_BUILD_TS "1552994747"
+#define SRS_AUTO_BUILD_DATE "2019-03-19 19:25:47"
+#define SRS_AUTO_UNAME "Darwin bilibil-test-5.local 18.2.0 Darwin Kernel Version 18.2.0: Thu Dec 20 20:46:53 PST 2018; root:xnu-4903.241.1~1/RELEASE_X86_64 x86_64"
+#define SRS_AUTO_USER_CONFIGURE "--x86-x64  --export-librtmp-project=../../srs-librtmp3.0 --without-ssl"
+#define SRS_AUTO_CONFIGURE "--prefix=/usr/local/srs --with-hls --without-hds --with-dvr --without-nginx --without-ssl --without-ffmpeg --without-transcode --without-ingest --without-stat --without-http-callback --with-http-server --without-stream-caster --without-kafka --with-http-api --with-librtmp --with-research --without-utest --without-gperf --without-gmc --without-gmd --without-gmp --without-gcp --without-gprof --without-arm-ubuntu12 --without-mips-ubuntu12 --log-trace"
 
 #define SRS_X86_X64
+#define SRS_X86_X64_BOOL true
 #define SRS_EXPORT_LIBRTMP
 
-#define SRS_AUTO_EMBEDED_TOOL_CHAIN "normal x86/x64 gcc"
+#undef SRS_AUTO_EMBEDED_TOOL_CHAIN
+#define SRS_AUTO_EMBEDED_TOOL_CHAIN_BOOL false
 
-#undef SRS_AUTO_HTTP_CORE
-#undef SRS_AUTO_HTTP_SERVER
-#undef SRS_AUTO_STREAM_CASTER
-#undef SRS_AUTO_HTTP_API
+#undef SRS_AUTO_KAFKA
+#define SRS_AUTO_KAFKA_BOOL false
 #undef SRS_AUTO_NGINX
-#undef SRS_AUTO_DVR
-#undef SRS_AUTO_HLS
+#define SRS_AUTO_NGINX_BOOL false
 #undef SRS_AUTO_HDS
-#undef SRS_AUTO_HTTP_CALLBACK
-#undef SRS_AUTO_SSL
+#define SRS_AUTO_HDS_BOOL false
 #undef SRS_AUTO_MEM_WATCH
+#define SRS_AUTO_MEM_WATCH_BOOL false
 #undef SRS_AUTO_FFMPEG_TOOL
+#define SRS_AUTO_FFMPEG_TOOL_BOOL false
 #define SRS_AUTO_FFMPEG_STUB
-#undef SRS_AUTO_TRANSCODE
-#undef SRS_AUTO_INGEST
-#undef SRS_AUTO_STAT
+#define SRS_AUTO_FFMPEG_STUB_BOOL true
 #undef SRS_AUTO_GPERF
+#define SRS_AUTO_GPERF_BOOL false
 #undef SRS_AUTO_GPERF_MC
+#define SRS_AUTO_GPERF_MC_BOOL false
+#undef SRS_AUTO_GPERF_MD
+#define SRS_AUTO_GPERF_MD_BOOL false
 #undef SRS_AUTO_GPERF_MP
+#define SRS_AUTO_GPERF_MP_BOOL false
 #undef SRS_AUTO_GPERF_CP
+#define SRS_AUTO_GPERF_CP_BOOL false
 #undef SRS_AUTO_EMBEDED_CPU
+#define SRS_AUTO_EMBEDED_CPU_BOOL false
 #undef SRS_AUTO_ARM_UBUNTU12
+#define SRS_AUTO_ARM_UBUNTU12_BOOL false
 #undef SRS_AUTO_MIPS_UBUNTU12
+#define SRS_AUTO_MIPS_UBUNTU12_BOOL false
 
 #undef SRS_AUTO_VERBOSE
+#define SRS_AUTO_VERBOSE_BOOL false
 #undef SRS_AUTO_INFO
+#define SRS_AUTO_INFO_BOOL false
 #define SRS_AUTO_TRACE
+#define SRS_AUTO_TRACE_BOOL true
 
 #define SRS_AUTO_PREFIX "/usr/local/srs"
 
@@ -65,7 +75,22 @@ synote<synote@qq.com> \
 lovecat<littlefawn@163.com> \
 panda1986<542638787@qq.com> \
 YueHonghui<hongf.yue@hotmail.com> \
+ThomasDreibholz<dreibh@simula.no> \
 JuntaoLiu<juntliu@gmail.com> \
+RocFang<fangpeng1986@gmail.com> \
+MakarovYaroslav<yaroslav.makarov.97@mail.ru> \
+MirkoVelic<mvelic@inoxx.net> \
+HuiZhang(huzhang2)<huzhang2@cisco.com> \
+OtterWa<simpleotter23@gmail.com> \
+walkermi<172192667@qq.com> \
+haofz<fuzhuang.hao@vhall.com> \
+ME_Kun_Han<hanvskun@hotmail.com> \
+ljx0305<ljx0305@gmail.com> \
+cenxinwei<censhanhe@163.com> \
+StarBrilliant<m13253@hotmail.com> \
+xubin<xubin@chnvideo.com> \
+intliang<yintiliang@gmail.com> \
+flowerwrong<sysuyangkang@gmail.com> \
 "
 
 #endif

@@ -1,35 +1,35 @@
-/*
-The MIT License (MIT)
-
-Copyright (c) 2013-2015 SRS(ossrs)
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of
-this software and associated documentation files (the "Software"), to deal in
-the Software without restriction, including without limitation the rights to
-use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
-the Software, and to permit persons to whom the Software is furnished to do so,
-subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
-FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
-COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
-IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
-CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-*/
+/**
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2013-2019 Winlin
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of
+ * this software and associated documentation files (the "Software"), to deal in
+ * the Software without restriction, including without limitation the rights to
+ * use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+ * the Software, and to permit persons to whom the Software is furnished to do so,
+ * subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+ * FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+ * COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+ * IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+ * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ */
 
 #include <srs_rtmp_stack.hpp>
 
-#include <srs_rtmp_amf0.hpp>
-#include <srs_rtmp_io.hpp>
-#include <srs_kernel_stream.hpp>
+#include <srs_protocol_amf0.hpp>
+#include <srs_protocol_io.hpp>
+#include <srs_kernel_buffer.hpp>
 #include <srs_core_autofree.hpp>
 #include <srs_kernel_utility.hpp>
-#include <srs_protocol_buffer.hpp>
-#include <srs_rtmp_utility.hpp>
+#include <srs_protocol_stream.hpp>
+#include <srs_protocol_utility.hpp>
 #include <srs_rtmp_handshake.hpp>
 
 // for srs-librtmp, @see https://github.com/ossrs/srs/issues/213
@@ -52,13 +52,13 @@ using namespace std;
 #define SRS_MIN_RECV_TIMEOUT_US (int64_t)(60*1000*1000LL)
 
 /****************************************************************************
-*****************************************************************************
-****************************************************************************/
+ *****************************************************************************
+ ****************************************************************************/
 /**
-* 6.1.2. Chunk Message Header
-* There are four different formats for the chunk message header,
-* selected by the "fmt" field in the chunk basic header.
-*/
+ * 6.1.2. Chunk Message Header
+ * There are four different formats for the chunk message header,
+ * selected by the "fmt" field in the chunk basic header.
+ */
 // 6.1.2.1. Type 0
 // Chunks of Type 0 are 11 bytes long. This type MUST be used at the
 // start of a chunk stream, and whenever the stream timestamp goes
@@ -95,13 +95,13 @@ using namespace std;
 #define RTMP_FMT_TYPE3                          3
 
 /****************************************************************************
-*****************************************************************************
-****************************************************************************/
+ *****************************************************************************
+ ****************************************************************************/
 /**
-* band width check method name, which will be invoked by client.
-* band width check mothods use SrsBandwidthPacket as its internal packet type,
-* so ensure you set command name when you use it.
-*/
+ * band width check method name, which will be invoked by client.
+ * band width check mothods use SrsBandwidthPacket as its internal packet type,
+ * so ensure you set command name when you use it.
+ */
 // server play control
 #define SRS_BW_CHECK_START_PLAY                 "onSrsBandCheckStartPlayBytes"
 #define SRS_BW_CHECK_STARTING_PLAY              "onSrsBandCheckStartingPlayBytes"
@@ -126,8 +126,8 @@ using namespace std;
 #define SRS_BW_CHECK_PUBLISHING                 "onSrsBandCheckPublishing"
 
 /****************************************************************************
-*****************************************************************************
-****************************************************************************/
+ *****************************************************************************
+ ****************************************************************************/
 
 SrsPacket::SrsPacket()
 {
@@ -137,48 +137,34 @@ SrsPacket::~SrsPacket()
 {
 }
 
-int SrsPacket::encode(int& psize, char*& ppayload)
+srs_error_t SrsPacket::encode(int& psize, char*& ppayload)
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
     int size = get_size();
     char* payload = NULL;
     
-    SrsStream stream;
-    
     if (size > 0) {
         payload = new char[size];
         
-        if ((ret = stream.initialize(payload, size)) != ERROR_SUCCESS) {
-            srs_error("initialize the stream failed. ret=%d", ret);
+        SrsBuffer* stream = new SrsBuffer(payload, size);
+        SrsAutoFree(SrsBuffer, stream);
+        
+        if ((err = encode_packet(stream)) != srs_success) {
             srs_freepa(payload);
-            return ret;
+            return srs_error_wrap(err, "encode packet");
         }
-    }
-    
-    if ((ret = encode_packet(&stream)) != ERROR_SUCCESS) {
-        srs_error("encode the packet failed. ret=%d", ret);
-        srs_freepa(payload);
-        return ret;
     }
     
     psize = size;
     ppayload = payload;
-    srs_verbose("encode the packet success. size=%d", size);
     
-    return ret;
+    return err;
 }
 
-int SrsPacket::decode(SrsStream* stream)
+srs_error_t SrsPacket::decode(SrsBuffer* stream)
 {
-    int ret = ERROR_SUCCESS;
-    
-    srs_assert(stream != NULL);
-    
-    ret = ERROR_SYSTEM_PACKET_INVALID;
-    srs_error("current packet is not support to decode. ret=%d", ret);
-    
-    return ret;
+    return srs_error_new(ERROR_SYSTEM_PACKET_INVALID, "decode");
 }
 
 int SrsPacket::get_prefer_cid()
@@ -196,16 +182,9 @@ int SrsPacket::get_size()
     return 0;
 }
 
-int SrsPacket::encode_packet(SrsStream* stream)
+srs_error_t SrsPacket::encode_packet(SrsBuffer* stream)
 {
-    int ret = ERROR_SUCCESS;
-    
-    srs_assert(stream != NULL);
-    
-    ret = ERROR_SYSTEM_PACKET_INVALID;
-    srs_error("current packet is not support to encode. ret=%d", ret);
-    
-    return ret;
+    return srs_error_new(ERROR_SYSTEM_PACKET_INVALID, "encode");
 }
 
 SrsProtocol::AckWindowSize::AckWindowSize()
@@ -214,9 +193,9 @@ SrsProtocol::AckWindowSize::AckWindowSize()
     sequence_number = nb_recv_bytes = 0;
 }
 
-SrsProtocol::SrsProtocol(ISrsProtocolReaderWriter* io)
+SrsProtocol::SrsProtocol(ISrsProtocolReadWriter* io)
 {
-    in_buffer = new SrsFastBuffer();
+    in_buffer = new SrsFastStream();
     skt = io;
     
     in_chunk_size = SRS_CONSTS_RTMP_PROTOCOL_CHUNK_SIZE;
@@ -255,7 +234,7 @@ SrsProtocol::~SrsProtocol()
             SrsChunkStream* stream = it->second;
             srs_freep(stream);
         }
-    
+        
         chunk_streams.clear();
     }
     
@@ -289,12 +268,12 @@ void SrsProtocol::set_auto_response(bool v)
     auto_response_when_recv = v;
 }
 
-int SrsProtocol::manual_response_flush()
+srs_error_t SrsProtocol::manual_response_flush()
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
     if (manual_response_queue.empty()) {
-        return ret;
+        return err;
     }
     
     std::vector<SrsPacket*>::iterator it;
@@ -305,12 +284,12 @@ int SrsProtocol::manual_response_flush()
         it = manual_response_queue.erase(it);
         
         // use underlayer api to send, donot flush again.
-        if ((ret = do_send_and_free_packet(pkt, 0)) != ERROR_SUCCESS) {
-            return ret;
+        if ((err = do_send_and_free_packet(pkt, 0)) != srs_success) {
+            return srs_error_wrap(err, "send packet");
         }
     }
     
-    return ret;
+    return err;
 }
 
 #ifdef SRS_PERF_MERGED_READ
@@ -325,9 +304,9 @@ void SrsProtocol::set_recv_buffer(int buffer_size)
 }
 #endif
 
-void SrsProtocol::set_recv_timeout(int64_t timeout_us)
+void SrsProtocol::set_recv_timeout(int64_t tm)
 {
-    return skt->set_recv_timeout(timeout_us);
+    return skt->set_recv_timeout(tm);
 }
 
 int64_t SrsProtocol::get_recv_timeout()
@@ -335,9 +314,9 @@ int64_t SrsProtocol::get_recv_timeout()
     return skt->get_recv_timeout();
 }
 
-void SrsProtocol::set_send_timeout(int64_t timeout_us)
+void SrsProtocol::set_send_timeout(int64_t tm)
 {
-    return skt->set_send_timeout(timeout_us);
+    return skt->set_send_timeout(tm);
 }
 
 int64_t SrsProtocol::get_send_timeout()
@@ -355,89 +334,78 @@ int64_t SrsProtocol::get_send_bytes()
     return skt->get_send_bytes();
 }
 
-int SrsProtocol::recv_message(SrsCommonMessage** pmsg)
+srs_error_t SrsProtocol::set_in_window_ack_size(int ack_size)
+{
+    in_ack_size.window = ack_size;
+    return srs_success;
+}
+
+srs_error_t SrsProtocol::recv_message(SrsCommonMessage** pmsg)
 {
     *pmsg = NULL;
     
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
     while (true) {
         SrsCommonMessage* msg = NULL;
         
-        if ((ret = recv_interlaced_message(&msg)) != ERROR_SUCCESS) {
-            if (ret != ERROR_SOCKET_TIMEOUT && !srs_is_client_gracefully_close(ret)) {
-                srs_error("recv interlaced message failed. ret=%d", ret);
-            }
+        if ((err = recv_interlaced_message(&msg)) != srs_success) {
             srs_freep(msg);
-            return ret;
+            return srs_error_wrap(err, "recv interlaced message");
         }
-        srs_verbose("entire msg received");
         
         if (!msg) {
-            srs_info("got empty message without error.");
             continue;
         }
         
         if (msg->size <= 0 || msg->header.payload_length <= 0) {
-            srs_trace("ignore empty message(type=%d, size=%d, time=%"PRId64", sid=%d).",
-                msg->header.message_type, msg->header.payload_length,
-                msg->header.timestamp, msg->header.stream_id);
+            srs_trace("ignore empty message(type=%d, size=%d, time=%" PRId64 ", sid=%d).",
+                      msg->header.message_type, msg->header.payload_length,
+                      msg->header.timestamp, msg->header.stream_id);
             srs_freep(msg);
             continue;
         }
         
-        if ((ret = on_recv_message(msg)) != ERROR_SUCCESS) {
-            srs_error("hook the received msg failed. ret=%d", ret);
+        if ((err = on_recv_message(msg)) != srs_success) {
             srs_freep(msg);
-            return ret;
+            return srs_error_wrap(err, "on recv message");
         }
         
-        srs_verbose("got a msg, cid=%d, type=%d, size=%d, time=%"PRId64, 
-            msg->header.perfer_cid, msg->header.message_type, msg->header.payload_length, 
-            msg->header.timestamp);
         *pmsg = msg;
         break;
     }
     
-    return ret;
+    return err;
 }
 
-int SrsProtocol::decode_message(SrsCommonMessage* msg, SrsPacket** ppacket)
+srs_error_t SrsProtocol::decode_message(SrsCommonMessage* msg, SrsPacket** ppacket)
 {
     *ppacket = NULL;
     
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
     srs_assert(msg != NULL);
     srs_assert(msg->payload != NULL);
     srs_assert(msg->size > 0);
     
-    SrsStream stream;
-
-    // initialize the decode stream for all message,
-    // it's ok for the initialize if fast and without memory copy.
-    if ((ret = stream.initialize(msg->payload, msg->size)) != ERROR_SUCCESS) {
-        srs_error("initialize stream failed. ret=%d", ret);
-        return ret;
-    }
-    srs_verbose("decode stream initialized success");
+    SrsBuffer stream(msg->payload, msg->size);
     
     // decode the packet.
     SrsPacket* packet = NULL;
-    if ((ret = do_decode_message(msg->header, &stream, &packet)) != ERROR_SUCCESS) {
+    if ((err = do_decode_message(msg->header, &stream, &packet)) != srs_success) {
         srs_freep(packet);
-        return ret;
+        return srs_error_wrap(err, "decode message");
     }
     
     // set to output ppacket only when success.
     *ppacket = packet;
     
-    return ret;
+    return err;
 }
 
-int SrsProtocol::do_send_messages(SrsSharedPtrMessage** msgs, int nb_msgs)
+srs_error_t SrsProtocol::do_send_messages(SrsSharedPtrMessage** msgs, int nb_msgs)
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
 #ifdef SRS_PERF_COMPLEX_SEND
     int iov_index = 0;
@@ -445,7 +413,7 @@ int SrsProtocol::do_send_messages(SrsSharedPtrMessage** msgs, int nb_msgs)
     
     int c0c3_cache_index = 0;
     char* c0c3_cache = out_c0c3_caches + c0c3_cache_index;
-
+    
     // try to send use the c0c3 header cache,
     // if cache is consumed, try another loop.
     for (int i = 0; i < nb_msgs; i++) {
@@ -454,13 +422,12 @@ int SrsProtocol::do_send_messages(SrsSharedPtrMessage** msgs, int nb_msgs)
         if (!msg) {
             continue;
         }
-    
+        
         // ignore empty message.
         if (!msg->payload || msg->size <= 0) {
-            srs_info("ignore empty message.");
             continue;
         }
-    
+        
         // p set to current write position,
         // it's ok when payload is NULL and size is 0.
         char* p = msg->payload;
@@ -489,10 +456,8 @@ int SrsProtocol::do_send_messages(SrsSharedPtrMessage** msgs, int nb_msgs)
             // for we donot know how many messges maybe to send entirely,
             // we just alloc the iovs, it's ok.
             if (iov_index >= nb_out_iovs - 2) {
-                srs_warn("resize iovs %d => %d, max_msgs=%d", 
-                    nb_out_iovs, nb_out_iovs + SRS_CONSTS_IOVS_MAX, 
-                    SRS_PERF_MW_MSGS);
-                    
+                srs_warn("resize iovs %d => %d, max_msgs=%d", nb_out_iovs, nb_out_iovs + SRS_CONSTS_IOVS_MAX, SRS_PERF_MW_MSGS);
+                
                 nb_out_iovs += SRS_CONSTS_IOVS_MAX;
                 int realloc_size = sizeof(iovec) * nb_out_iovs;
                 out_iovs = (iovec*)realloc(out_iovs, realloc_size);
@@ -501,7 +466,7 @@ int SrsProtocol::do_send_messages(SrsSharedPtrMessage** msgs, int nb_msgs)
             // to next pair of iovs
             iov_index += 2;
             iovs = out_iovs + iov_index;
-
+            
             // to next c0c3 header cache
             c0c3_cache_index += nbh;
             c0c3_cache = out_c0c3_caches + c0c3_cache_index;
@@ -513,18 +478,17 @@ int SrsProtocol::do_send_messages(SrsSharedPtrMessage** msgs, int nb_msgs)
             if (c0c3_left < SRS_CONSTS_RTMP_MAX_FMT0_HEADER_SIZE) {
                 // only warn once for a connection.
                 if (!warned_c0c3_cache_dry) {
-                    srs_warn("c0c3 cache header too small, recoment to %d", 
-                        SRS_CONSTS_C0C3_HEADERS_MAX + SRS_CONSTS_RTMP_MAX_FMT0_HEADER_SIZE);
+                    srs_warn("c0c3 cache header too small, recoment to %d", SRS_CONSTS_C0C3_HEADERS_MAX + SRS_CONSTS_RTMP_MAX_FMT0_HEADER_SIZE);
                     warned_c0c3_cache_dry = true;
                 }
                 
                 // when c0c3 cache dry,
                 // sendout all messages and reset the cache, then send again.
-                if ((ret = do_iovs_send(out_iovs, iov_index)) != ERROR_SUCCESS) {
-                    return ret;
+                if ((err = do_iovs_send(out_iovs, iov_index)) != srs_success) {
+                    return srs_error_wrap(err, "send iovs");
                 }
-    
-                // reset caches, while these cache ensure 
+                
+                // reset caches, while these cache ensure
                 // atleast we can sendout a chunk.
                 iov_index = 0;
                 iovs = out_iovs + iov_index;
@@ -538,11 +502,9 @@ int SrsProtocol::do_send_messages(SrsSharedPtrMessage** msgs, int nb_msgs)
     // maybe the iovs already sendout when c0c3 cache dry,
     // so just ignore when no iovs to send.
     if (iov_index <= 0) {
-        return ret;
+        return err;
     }
-    srs_info("mw %d msgs in %d iovs, max_msgs=%d, nb_out_iovs=%d",
-        nb_msgs, iov_index, SRS_PERF_MW_MSGS, nb_out_iovs);
-
+    
     return do_iovs_send(out_iovs, iov_index);
 #else
     // try to send use the c0c3 header cache,
@@ -553,13 +515,12 @@ int SrsProtocol::do_send_messages(SrsSharedPtrMessage** msgs, int nb_msgs)
         if (!msg) {
             continue;
         }
-    
+        
         // ignore empty message.
         if (!msg->payload || msg->size <= 0) {
-            srs_info("ignore empty message.");
             continue;
         }
-    
+        
         // p set to current write position,
         // it's ok when payload is NULL and size is 0.
         char* p = msg->payload;
@@ -587,43 +548,39 @@ int SrsProtocol::do_send_messages(SrsSharedPtrMessage** msgs, int nb_msgs)
             
             // consume sendout bytes.
             p += payload_size;
-
-            if ((ret = skt->writev(iovs, 2, NULL)) != ERROR_SUCCESS) {
-                if (!srs_is_client_gracefully_close(ret)) {
-                    srs_error("send packet with writev failed. ret=%d", ret);
-                }
-                return ret;
+            
+            if ((er = skt->writev(iovs, 2, NULL)) != srs_success) {
+                return srs_error_wrap(err, "writev");
             }
         }
     }
     
-    return ret;
-#endif   
+    return err;
+#endif
 }
 
-int SrsProtocol::do_iovs_send(iovec* iovs, int size)
+srs_error_t SrsProtocol::do_iovs_send(iovec* iovs, int size)
 {
     return srs_write_large_iovs(skt, iovs, size);
 }
 
-int SrsProtocol::do_send_and_free_packet(SrsPacket* packet, int stream_id)
+srs_error_t SrsProtocol::do_send_and_free_packet(SrsPacket* packet, int stream_id)
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
     srs_assert(packet);
     SrsAutoFree(SrsPacket, packet);
     
     int size = 0;
     char* payload = NULL;
-    if ((ret = packet->encode(size, payload)) != ERROR_SUCCESS) {
-        srs_error("encode RTMP packet to bytes oriented RTMP message failed. ret=%d", ret);
-        return ret;
+    if ((err = packet->encode(size, payload)) != srs_success) {
+        return srs_error_wrap(err, "encode packet");
     }
     
     // encode packet to payload and size.
     if (size <= 0 || payload == NULL) {
         srs_warn("packet is empty, ignore empty message.");
-        return ret;
+        return err;
     }
     
     // to message
@@ -633,18 +590,22 @@ int SrsProtocol::do_send_and_free_packet(SrsPacket* packet, int stream_id)
     header.stream_id = stream_id;
     header.perfer_cid = packet->get_prefer_cid();
     
-    ret = do_simple_send(&header, payload, size);
+    err = do_simple_send(&header, payload, size);
     srs_freepa(payload);
-    if (ret == ERROR_SUCCESS) {
-        ret = on_send_packet(&header, packet);
+    if (err != srs_success) {
+        return srs_error_wrap(err, "simple send");
     }
     
-    return ret;
+    if ((err = on_send_packet(&header, packet)) != srs_success) {
+        return srs_error_wrap(err, "on send packet");
+    }
+    
+    return err;
 }
 
-int SrsProtocol::do_simple_send(SrsMessageHeader* mh, char* payload, int size)
+srs_error_t SrsProtocol::do_simple_send(SrsMessageHeader* mh, char* payload, int size)
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
     // we directly send out the packet,
     // use very simple algorithm, not very fast,
@@ -655,14 +616,9 @@ int SrsProtocol::do_simple_send(SrsMessageHeader* mh, char* payload, int size)
     while (p < end) {
         int nbh = 0;
         if (p == payload) {
-            nbh = srs_chunk_header_c0(
-                mh->perfer_cid, mh->timestamp, mh->payload_length,
-                mh->message_type, mh->stream_id,
-                c0c3, sizeof(c0c3));
+            nbh = srs_chunk_header_c0(mh->perfer_cid, (uint32_t)mh->timestamp, mh->payload_length, mh->message_type, mh->stream_id, c0c3, sizeof(c0c3));
         } else {
-            nbh = srs_chunk_header_c3(
-                mh->perfer_cid, mh->timestamp,
-                c0c3, sizeof(c0c3));
+            nbh = srs_chunk_header_c3(mh->perfer_cid, (uint32_t)mh->timestamp, c0c3, sizeof(c0c3));
         }
         srs_assert(nbh > 0);;
         
@@ -670,55 +626,45 @@ int SrsProtocol::do_simple_send(SrsMessageHeader* mh, char* payload, int size)
         iovs[0].iov_base = c0c3;
         iovs[0].iov_len = nbh;
         
-        int payload_size = srs_min(end - p, out_chunk_size);
+        int payload_size = srs_min((int)(end - p), out_chunk_size);
         iovs[1].iov_base = p;
         iovs[1].iov_len = payload_size;
         p += payload_size;
         
-        if ((ret = skt->writev(iovs, 2, NULL)) != ERROR_SUCCESS) {
-            if (!srs_is_client_gracefully_close(ret)) {
-                srs_error("send packet with writev failed. ret=%d", ret);
-            }
-            return ret;
+        if ((err = skt->writev(iovs, 2, NULL)) != srs_success) {
+            return srs_error_wrap(err, "writev packet");
         }
     }
     
-    return ret;
+    return err;
 }
 
-int SrsProtocol::do_decode_message(SrsMessageHeader& header, SrsStream* stream, SrsPacket** ppacket)
+srs_error_t SrsProtocol::do_decode_message(SrsMessageHeader& header, SrsBuffer* stream, SrsPacket** ppacket)
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
     SrsPacket* packet = NULL;
     
     // decode specified packet type
     if (header.is_amf0_command() || header.is_amf3_command() || header.is_amf0_data() || header.is_amf3_data()) {
-        srs_verbose("start to decode AMF0/AMF3 command message.");
-        
         // skip 1bytes to decode the amf3 command.
         if (header.is_amf3_command() && stream->require(1)) {
-            srs_verbose("skip 1bytes to decode AMF3 command");
             stream->skip(1);
         }
         
         // amf0 command message.
         // need to read the command name.
         std::string command;
-        if ((ret = srs_amf0_read_string(stream, command)) != ERROR_SUCCESS) {
-            srs_error("decode AMF0/AMF3 command name failed. ret=%d", ret);
-            return ret;
+        if ((err = srs_amf0_read_string(stream, command)) != srs_success) {
+            return srs_error_wrap(err, "decode command name");
         }
-        srs_verbose("AMF0/AMF3 command message, command_name=%s", command.c_str());
         
         // result/error packet
         if (command == RTMP_AMF0_COMMAND_RESULT || command == RTMP_AMF0_COMMAND_ERROR) {
             double transactionId = 0.0;
-            if ((ret = srs_amf0_read_number(stream, transactionId)) != ERROR_SUCCESS) {
-                srs_error("decode AMF0/AMF3 transcationId failed. ret=%d", ret);
-                return ret;
+            if ((err = srs_amf0_read_number(stream, transactionId)) != srs_success) {
+                return srs_error_wrap(err, "decode tid for %s", command.c_str());
             }
-            srs_verbose("AMF0/AMF3 command id, transcationId=%.2f", transactionId);
             
             // reset stream, for header read completed.
             stream->skip(-1 * stream->pos());
@@ -728,34 +674,27 @@ int SrsProtocol::do_decode_message(SrsMessageHeader& header, SrsStream* stream, 
             
             // find the call name
             if (requests.find(transactionId) == requests.end()) {
-                ret = ERROR_RTMP_NO_REQUEST;
-                srs_error("decode AMF0/AMF3 request failed. ret=%d", ret);
-                return ret;
+                return srs_error_new(ERROR_RTMP_NO_REQUEST, "find request for command=%s, tid=%.2f", command.c_str(), transactionId);
             }
             
             std::string request_name = requests[transactionId];
-            srs_verbose("AMF0/AMF3 request parsed. request_name=%s", request_name.c_str());
-
             if (request_name == RTMP_AMF0_COMMAND_CONNECT) {
-                srs_info("decode the AMF0/AMF3 response command(%s message).", request_name.c_str());
                 *ppacket = packet = new SrsConnectAppResPacket();
                 return packet->decode(stream);
             } else if (request_name == RTMP_AMF0_COMMAND_CREATE_STREAM) {
-                srs_info("decode the AMF0/AMF3 response command(%s message).", request_name.c_str());
                 *ppacket = packet = new SrsCreateStreamResPacket(0, 0);
                 return packet->decode(stream);
-            } else if (request_name == RTMP_AMF0_COMMAND_RELEASE_STREAM
-                || request_name == RTMP_AMF0_COMMAND_FC_PUBLISH
-                || request_name == RTMP_AMF0_COMMAND_UNPUBLISH) {
-                srs_info("decode the AMF0/AMF3 response command(%s message).", request_name.c_str());
+            } else if (request_name == RTMP_AMF0_COMMAND_RELEASE_STREAM) {
+                *ppacket = packet = new SrsFMLEStartResPacket(0);
+                return packet->decode(stream);
+            } else if (request_name == RTMP_AMF0_COMMAND_FC_PUBLISH) {
+                *ppacket = packet = new SrsFMLEStartResPacket(0);
+                return packet->decode(stream);
+            } else if (request_name == RTMP_AMF0_COMMAND_UNPUBLISH) {
                 *ppacket = packet = new SrsFMLEStartResPacket(0);
                 return packet->decode(stream);
             } else {
-                ret = ERROR_RTMP_NO_REQUEST;
-                srs_error("decode AMF0/AMF3 request failed. "
-                    "request_name=%s, transactionId=%.2f, ret=%d", 
-                    request_name.c_str(), transactionId, ret);
-                return ret;
+                return srs_error_new(ERROR_RTMP_NO_REQUEST, "request=%s, tid=%.2f", request_name.c_str(), transactionId);
             }
         }
         
@@ -767,81 +706,89 @@ int SrsProtocol::do_decode_message(SrsMessageHeader& header, SrsStream* stream, 
         
         // decode command object.
         if (command == RTMP_AMF0_COMMAND_CONNECT) {
-            srs_info("decode the AMF0/AMF3 command(connect vhost/app message).");
             *ppacket = packet = new SrsConnectAppPacket();
             return packet->decode(stream);
-        } else if(command == RTMP_AMF0_COMMAND_CREATE_STREAM) {
-            srs_info("decode the AMF0/AMF3 command(createStream message).");
+        } else if (command == RTMP_AMF0_COMMAND_CREATE_STREAM) {
             *ppacket = packet = new SrsCreateStreamPacket();
             return packet->decode(stream);
-        } else if(command == RTMP_AMF0_COMMAND_PLAY) {
-            srs_info("decode the AMF0/AMF3 command(paly message).");
+        } else if (command == RTMP_AMF0_COMMAND_PLAY) {
             *ppacket = packet = new SrsPlayPacket();
             return packet->decode(stream);
-        } else if(command == RTMP_AMF0_COMMAND_PAUSE) {
-            srs_info("decode the AMF0/AMF3 command(pause message).");
+        } else if (command == RTMP_AMF0_COMMAND_PAUSE) {
             *ppacket = packet = new SrsPausePacket();
             return packet->decode(stream);
-        } else if(command == RTMP_AMF0_COMMAND_RELEASE_STREAM) {
-            srs_info("decode the AMF0/AMF3 command(FMLE releaseStream message).");
+        } else if (command == RTMP_AMF0_COMMAND_RELEASE_STREAM) {
             *ppacket = packet = new SrsFMLEStartPacket();
             return packet->decode(stream);
-        } else if(command == RTMP_AMF0_COMMAND_FC_PUBLISH) {
-            srs_info("decode the AMF0/AMF3 command(FMLE FCPublish message).");
+        } else if (command == RTMP_AMF0_COMMAND_FC_PUBLISH) {
             *ppacket = packet = new SrsFMLEStartPacket();
             return packet->decode(stream);
-        } else if(command == RTMP_AMF0_COMMAND_PUBLISH) {
-            srs_info("decode the AMF0/AMF3 command(publish message).");
+        } else if (command == RTMP_AMF0_COMMAND_PUBLISH) {
             *ppacket = packet = new SrsPublishPacket();
             return packet->decode(stream);
-        } else if(command == RTMP_AMF0_COMMAND_UNPUBLISH) {
-            srs_info("decode the AMF0/AMF3 command(unpublish message).");
+        } else if (command == RTMP_AMF0_COMMAND_UNPUBLISH) {
             *ppacket = packet = new SrsFMLEStartPacket();
             return packet->decode(stream);
-        } else if(command == SRS_CONSTS_RTMP_SET_DATAFRAME || command == SRS_CONSTS_RTMP_ON_METADATA) {
-            srs_info("decode the AMF0/AMF3 data(onMetaData message).");
+        } else if (command == SRS_CONSTS_RTMP_SET_DATAFRAME) {
             *ppacket = packet = new SrsOnMetaDataPacket();
             return packet->decode(stream);
-        } else if(command == SRS_BW_CHECK_FINISHED
-            || command == SRS_BW_CHECK_PLAYING
-            || command == SRS_BW_CHECK_PUBLISHING
-            || command == SRS_BW_CHECK_STARTING_PLAY
-            || command == SRS_BW_CHECK_STARTING_PUBLISH
-            || command == SRS_BW_CHECK_START_PLAY
-            || command == SRS_BW_CHECK_START_PUBLISH
-            || command == SRS_BW_CHECK_STOPPED_PLAY
-            || command == SRS_BW_CHECK_STOP_PLAY
-            || command == SRS_BW_CHECK_STOP_PUBLISH
-            || command == SRS_BW_CHECK_STOPPED_PUBLISH
-            || command == SRS_BW_CHECK_FINAL)
-        {
-            srs_info("decode the AMF0/AMF3 band width check message.");
+        } else if (command == SRS_CONSTS_RTMP_ON_METADATA) {
+            *ppacket = packet = new SrsOnMetaDataPacket();
+            return packet->decode(stream);
+        } else if (command == SRS_BW_CHECK_FINISHED) {
+            *ppacket = packet = new SrsBandwidthPacket();
+            return packet->decode(stream);
+        } else if (command == SRS_BW_CHECK_PLAYING) {
+            *ppacket = packet = new SrsBandwidthPacket();
+            return packet->decode(stream);
+        } else if (command == SRS_BW_CHECK_PUBLISHING) {
+            *ppacket = packet = new SrsBandwidthPacket();
+            return packet->decode(stream);
+        } else if (command == SRS_BW_CHECK_STARTING_PLAY) {
+            *ppacket = packet = new SrsBandwidthPacket();
+            return packet->decode(stream);
+        } else if (command == SRS_BW_CHECK_STARTING_PUBLISH) {
+            *ppacket = packet = new SrsBandwidthPacket();
+            return packet->decode(stream);
+        } else if (command == SRS_BW_CHECK_START_PLAY) {
+            *ppacket = packet = new SrsBandwidthPacket();
+            return packet->decode(stream);
+        } else if (command == SRS_BW_CHECK_START_PUBLISH) {
+            *ppacket = packet = new SrsBandwidthPacket();
+            return packet->decode(stream);
+        } else if (command == SRS_BW_CHECK_STOPPED_PLAY) {
+            *ppacket = packet = new SrsBandwidthPacket();
+            return packet->decode(stream);
+        } else if (command == SRS_BW_CHECK_STOP_PLAY) {
+            *ppacket = packet = new SrsBandwidthPacket();
+            return packet->decode(stream);
+        } else if (command == SRS_BW_CHECK_STOP_PUBLISH) {
+            *ppacket = packet = new SrsBandwidthPacket();
+            return packet->decode(stream);
+        } else if (command == SRS_BW_CHECK_STOPPED_PUBLISH) {
+            *ppacket = packet = new SrsBandwidthPacket();
+            return packet->decode(stream);
+        } else if (command == SRS_BW_CHECK_FINAL) {
             *ppacket = packet = new SrsBandwidthPacket();
             return packet->decode(stream);
         } else if (command == RTMP_AMF0_COMMAND_CLOSE_STREAM) {
-            srs_info("decode the AMF0/AMF3 closeStream message.");
             *ppacket = packet = new SrsCloseStreamPacket();
             return packet->decode(stream);
         } else if (header.is_amf0_command() || header.is_amf3_command()) {
-            srs_info("decode the AMF0/AMF3 call message.");
             *ppacket = packet = new SrsCallPacket();
             return packet->decode(stream);
         }
         
         // default packet to drop message.
-        srs_info("drop the AMF0/AMF3 command message, command_name=%s", command.c_str());
         *ppacket = packet = new SrsPacket();
-        return ret;
-    } else if(header.is_user_control_message()) {
-        srs_verbose("start to decode user control message.");
+        return err;
+    } else if (header.is_user_control_message()) {
         *ppacket = packet = new SrsUserControlPacket();
         return packet->decode(stream);
-    } else if(header.is_window_ackledgement_size()) {
-        srs_verbose("start to decode set ack window size message.");
+    } else if (header.is_window_ackledgement_size()) {
         *ppacket = packet = new SrsSetWindowAckSizePacket();
         return packet->decode(stream);
-    } else if(header.is_set_chunk_size()) {
-        srs_verbose("start to decode set chunk size message.");
+    } else if (header.is_set_chunk_size()) {
         *ppacket = packet = new SrsSetChunkSizePacket();
         return packet->decode(stream);
     } else {
@@ -850,15 +797,15 @@ int SrsProtocol::do_decode_message(SrsMessageHeader& header, SrsStream* stream, 
         }
     }
     
-    return ret;
+    return err;
 }
 
-int SrsProtocol::send_and_free_message(SrsSharedPtrMessage* msg, int stream_id)
+srs_error_t SrsProtocol::send_and_free_message(SrsSharedPtrMessage* msg, int stream_id)
 {
     return send_and_free_messages(&msg, 1, stream_id);
 }
 
-int SrsProtocol::send_and_free_messages(SrsSharedPtrMessage** msgs, int nb_msgs, int stream_id)
+srs_error_t SrsProtocol::send_and_free_messages(SrsSharedPtrMessage** msgs, int nb_msgs, int stream_id)
 {
     // always not NULL msg.
     srs_assert(msgs);
@@ -881,7 +828,7 @@ int SrsProtocol::send_and_free_messages(SrsSharedPtrMessage** msgs, int nb_msgs,
     
     // donot use the auto free to free the msg,
     // for performance issue.
-    int ret = do_send_messages(msgs, nb_msgs);
+    srs_error_t err = do_send_messages(msgs, nb_msgs);
     
     for (int i = 0; i < nb_msgs; i++) {
         SrsSharedPtrMessage* msg = msgs[i];
@@ -889,50 +836,46 @@ int SrsProtocol::send_and_free_messages(SrsSharedPtrMessage** msgs, int nb_msgs,
     }
     
     // donot flush when send failed
-    if (ret != ERROR_SUCCESS) {
-        return ret;
+    if (err != srs_success) {
+        return srs_error_wrap(err, "send messages");
     }
     
     // flush messages in manual queue
-    if ((ret = manual_response_flush()) != ERROR_SUCCESS) {
-        return ret;
+    if ((err = manual_response_flush()) != srs_success) {
+        return srs_error_wrap(err, "manual flush response");
     }
     
     print_debug_info();
     
-    return ret;
+    return err;
 }
 
-int SrsProtocol::send_and_free_packet(SrsPacket* packet, int stream_id)
+srs_error_t SrsProtocol::send_and_free_packet(SrsPacket* packet, int stream_id)
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
-    if ((ret = do_send_and_free_packet(packet, stream_id)) != ERROR_SUCCESS) {
-        return ret;
+    if ((err = do_send_and_free_packet(packet, stream_id)) != srs_success) {
+        return srs_error_wrap(err, "send packet");
     }
     
     // flush messages in manual queue
-    if ((ret = manual_response_flush()) != ERROR_SUCCESS) {
-        return ret;
+    if ((err = manual_response_flush()) != srs_success) {
+        return srs_error_wrap(err, "manual flush response");
     }
     
-    return ret;
+    return err;
 }
 
-int SrsProtocol::recv_interlaced_message(SrsCommonMessage** pmsg)
+srs_error_t SrsProtocol::recv_interlaced_message(SrsCommonMessage** pmsg)
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
     // chunk stream basic header.
     char fmt = 0;
     int cid = 0;
-    if ((ret = read_basic_header(fmt, cid)) != ERROR_SUCCESS) {
-        if (ret != ERROR_SOCKET_TIMEOUT && !srs_is_client_gracefully_close(ret)) {
-            srs_error("read basic header failed. ret=%d", ret);
-        }
-        return ret;
+    if ((err = read_basic_header(fmt, cid)) != srs_success) {
+        return srs_error_wrap(err, "read basic header");
     }
-    srs_verbose("read basic header success. fmt=%d, cid=%d", fmt, cid);
     
     // the cid must not negative.
     srs_assert(cid >= 0);
@@ -943,13 +886,8 @@ int SrsProtocol::recv_interlaced_message(SrsCommonMessage** pmsg)
     // use chunk stream cache to get the chunk info.
     // @see https://github.com/ossrs/srs/issues/249
     if (cid < SRS_PERF_CHUNK_STREAM_CACHE) {
-        // chunk stream cache hit.
-        srs_verbose("cs-cache hit, cid=%d", cid);
         // already init, use it direclty
         chunk = cs_cache[cid];
-        srs_verbose("cached chunk stream: fmt=%d, cid=%d, size=%d, message(type=%d, size=%d, time=%"PRId64", sid=%d)",
-            chunk->fmt, chunk->cid, (chunk->msg? chunk->msg->size : 0), chunk->header.message_type, chunk->header.payload_length,
-            chunk->header.timestamp, chunk->header.stream_id);
     } else {
         // chunk stream cache miss, use map.
         if (chunk_streams.find(cid) == chunk_streams.end()) {
@@ -957,105 +895,81 @@ int SrsProtocol::recv_interlaced_message(SrsCommonMessage** pmsg)
             // set the perfer cid of chunk,
             // which will copy to the message received.
             chunk->header.perfer_cid = cid;
-            srs_verbose("cache new chunk stream: fmt=%d, cid=%d", fmt, cid);
         } else {
             chunk = chunk_streams[cid];
-            srs_verbose("cached chunk stream: fmt=%d, cid=%d, size=%d, message(type=%d, size=%d, time=%"PRId64", sid=%d)",
-                chunk->fmt, chunk->cid, (chunk->msg? chunk->msg->size : 0), chunk->header.message_type, chunk->header.payload_length,
-                chunk->header.timestamp, chunk->header.stream_id);
         }
     }
-
+    
     // chunk stream message header
-    if ((ret = read_message_header(chunk, fmt)) != ERROR_SUCCESS) {
-        if (ret != ERROR_SOCKET_TIMEOUT && !srs_is_client_gracefully_close(ret)) {
-            srs_error("read message header failed. ret=%d", ret);
-        }
-        return ret;
+    if ((err = read_message_header(chunk, fmt)) != srs_success) {
+        return srs_error_wrap(err, "read message header");
     }
-    srs_verbose("read message header success. "
-            "fmt=%d, ext_time=%d, size=%d, message(type=%d, size=%d, time=%"PRId64", sid=%d)", 
-            fmt, chunk->extended_timestamp, (chunk->msg? chunk->msg->size : 0), chunk->header.message_type, 
-            chunk->header.payload_length, chunk->header.timestamp, chunk->header.stream_id);
     
     // read msg payload from chunk stream.
     SrsCommonMessage* msg = NULL;
-    if ((ret = read_message_payload(chunk, &msg)) != ERROR_SUCCESS) {
-        if (ret != ERROR_SOCKET_TIMEOUT && !srs_is_client_gracefully_close(ret)) {
-            srs_error("read message payload failed. ret=%d", ret);
-        }
-        return ret;
+    if ((err = read_message_payload(chunk, &msg)) != srs_success) {
+        return srs_error_wrap(err, "read message payload");
     }
     
     // not got an entire RTMP message, try next chunk.
     if (!msg) {
-        srs_verbose("get partial message success. size=%d, message(type=%d, size=%d, time=%"PRId64", sid=%d)",
-                (msg? msg->size : (chunk->msg? chunk->msg->size : 0)), chunk->header.message_type, chunk->header.payload_length,
-                chunk->header.timestamp, chunk->header.stream_id);
-        return ret;
+        return err;
     }
     
     *pmsg = msg;
-    srs_info("get entire message success. size=%d, message(type=%d, size=%d, time=%"PRId64", sid=%d)",
-            (msg? msg->size : (chunk->msg? chunk->msg->size : 0)), chunk->header.message_type, chunk->header.payload_length,
-            chunk->header.timestamp, chunk->header.stream_id);
-            
-    return ret;
+    return err;
 }
 
 /**
-* 6.1.1. Chunk Basic Header
-* The Chunk Basic Header encodes the chunk stream ID and the chunk
-* type(represented by fmt field in the figure below). Chunk type
-* determines the format of the encoded message header. Chunk Basic
-* Header field may be 1, 2, or 3 bytes, depending on the chunk stream
-* ID.
-* 
-* The bits 0-5 (least significant) in the chunk basic header represent
-* the chunk stream ID.
-*
-* Chunk stream IDs 2-63 can be encoded in the 1-byte version of this
-* field.
-*    0 1 2 3 4 5 6 7
-*   +-+-+-+-+-+-+-+-+
-*   |fmt|   cs id   |
-*   +-+-+-+-+-+-+-+-+
-*   Figure 6 Chunk basic header 1
-*
-* Chunk stream IDs 64-319 can be encoded in the 2-byte version of this
-* field. ID is computed as (the second byte + 64).
-*   0                   1
-*   0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5
-*   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-*   |fmt|    0      | cs id - 64    |
-*   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-*   Figure 7 Chunk basic header 2
-*
-* Chunk stream IDs 64-65599 can be encoded in the 3-byte version of
-* this field. ID is computed as ((the third byte)*256 + the second byte
-* + 64).
-*    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3
-*   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-*   |fmt|     1     |         cs id - 64            |
-*   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-*   Figure 8 Chunk basic header 3
-*
-* cs id: 6 bits
-* fmt: 2 bits
-* cs id - 64: 8 or 16 bits
-* 
-* Chunk stream IDs with values 64-319 could be represented by both 2-
-* byte version and 3-byte version of this field.
-*/
-int SrsProtocol::read_basic_header(char& fmt, int& cid)
+ * 6.1.1. Chunk Basic Header
+ * The Chunk Basic Header encodes the chunk stream ID and the chunk
+ * type(represented by fmt field in the figure below). Chunk type
+ * determines the format of the encoded message header. Chunk Basic
+ * Header field may be 1, 2, or 3 bytes, depending on the chunk stream
+ * ID.
+ *
+ * The bits 0-5 (least significant) in the chunk basic header represent
+ * the chunk stream ID.
+ *
+ * Chunk stream IDs 2-63 can be encoded in the 1-byte version of this
+ * field.
+ *    0 1 2 3 4 5 6 7
+ *   +-+-+-+-+-+-+-+-+
+ *   |fmt|   cs id   |
+ *   +-+-+-+-+-+-+-+-+
+ *   Figure 6 Chunk basic header 1
+ *
+ * Chunk stream IDs 64-319 can be encoded in the 2-byte version of this
+ * field. ID is computed as (the second byte + 64).
+ *   0                   1
+ *   0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |fmt|    0      | cs id - 64    |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   Figure 7 Chunk basic header 2
+ *
+ * Chunk stream IDs 64-65599 can be encoded in the 3-byte version of
+ * this field. ID is computed as ((the third byte)*256 + the second byte
+ * + 64).
+ *    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   |fmt|     1     |         cs id - 64            |
+ *   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ *   Figure 8 Chunk basic header 3
+ *
+ * cs id: 6 bits
+ * fmt: 2 bits
+ * cs id - 64: 8 or 16 bits
+ *
+ * Chunk stream IDs with values 64-319 could be represented by both 2-
+ * byte version and 3-byte version of this field.
+ */
+srs_error_t SrsProtocol::read_basic_header(char& fmt, int& cid)
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
-    if ((ret = in_buffer->grow(skt, 1)) != ERROR_SUCCESS) {
-        if (ret != ERROR_SOCKET_TIMEOUT && !srs_is_client_gracefully_close(ret)) {
-            srs_error("read 1bytes basic header failed. required_size=%d, ret=%d", 1, ret);
-        }
-        return ret;
+    if ((err = in_buffer->grow(skt, 1)) != srs_success) {
+        return srs_error_wrap(err, "basic header requires 1 bytes");
     }
     
     fmt = in_buffer->read_1byte();
@@ -1064,85 +978,76 @@ int SrsProtocol::read_basic_header(char& fmt, int& cid)
     
     // 2-63, 1B chunk header
     if (cid > 1) {
-        srs_verbose("basic header parsed. fmt=%d, cid=%d", fmt, cid);
-        return ret;
+        return err;
     }
-
+    
     // 64-319, 2B chunk header
     if (cid == 0) {
-        if ((ret = in_buffer->grow(skt, 1)) != ERROR_SUCCESS) {
-            if (ret != ERROR_SOCKET_TIMEOUT && !srs_is_client_gracefully_close(ret)) {
-                srs_error("read 2bytes basic header failed. required_size=%d, ret=%d", 1, ret);
-            }
-            return ret;
+        if ((err = in_buffer->grow(skt, 1)) != srs_success) {
+            return srs_error_wrap(err, "basic header requires 2 bytes");
         }
         
         cid = 64;
-        cid += (u_int8_t)in_buffer->read_1byte();
-        srs_verbose("2bytes basic header parsed. fmt=%d, cid=%d", fmt, cid);
-    // 64-65599, 3B chunk header
+        cid += (uint8_t)in_buffer->read_1byte();
+        // 64-65599, 3B chunk header
     } else if (cid == 1) {
-        if ((ret = in_buffer->grow(skt, 2)) != ERROR_SUCCESS) {
-            if (ret != ERROR_SOCKET_TIMEOUT && !srs_is_client_gracefully_close(ret)) {
-                srs_error("read 3bytes basic header failed. required_size=%d, ret=%d", 2, ret);
-            }
-            return ret;
+        if ((err = in_buffer->grow(skt, 2)) != srs_success) {
+            return srs_error_wrap(err, "basic header requires 3 bytes");
         }
         
         cid = 64;
-        cid += (u_int8_t)in_buffer->read_1byte();
-        cid += ((u_int8_t)in_buffer->read_1byte()) * 256;
-        srs_verbose("3bytes basic header parsed. fmt=%d, cid=%d", fmt, cid);
+        cid += (uint8_t)in_buffer->read_1byte();
+        cid += ((uint8_t)in_buffer->read_1byte()) * 256;
     } else {
         srs_error("invalid path, impossible basic header.");
         srs_assert(false);
     }
     
-    return ret;
+    return err;
 }
 
 /**
-* parse the message header.
-*   3bytes: timestamp delta,    fmt=0,1,2
-*   3bytes: payload length,     fmt=0,1
-*   1bytes: message type,       fmt=0,1
-*   4bytes: stream id,          fmt=0
-* where:
-*   fmt=0, 0x0X
-*   fmt=1, 0x4X
-*   fmt=2, 0x8X
-*   fmt=3, 0xCX
-*/
-int SrsProtocol::read_message_header(SrsChunkStream* chunk, char fmt)
+ * parse the message header.
+ *   3bytes: timestamp delta,    fmt=0,1,2
+ *   3bytes: payload length,     fmt=0,1
+ *   1bytes: message type,       fmt=0,1
+ *   4bytes: stream id,          fmt=0
+ * where:
+ *   fmt=0, 0x0X
+ *   fmt=1, 0x4X
+ *   fmt=2, 0x8X
+ *   fmt=3, 0xCX
+ */
+srs_error_t SrsProtocol::read_message_header(SrsChunkStream* chunk, char fmt)
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
     /**
-    * we should not assert anything about fmt, for the first packet.
-    * (when first packet, the chunk->msg is NULL).
-    * the fmt maybe 0/1/2/3, the FMLE will send a 0xC4 for some audio packet.
-    * the previous packet is:
-    *     04                // fmt=0, cid=4
-    *     00 00 1a          // timestamp=26
-    *     00 00 9d          // payload_length=157
-    *     08                // message_type=8(audio)
-    *     01 00 00 00       // stream_id=1
-    * the current packet maybe:
-    *     c4             // fmt=3, cid=4
-    * it's ok, for the packet is audio, and timestamp delta is 26.
-    * the current packet must be parsed as:
-    *     fmt=0, cid=4
-    *     timestamp=26+26=52
-    *     payload_length=157
-    *     message_type=8(audio)
-    *     stream_id=1
-    * so we must update the timestamp even fmt=3 for first packet.
-    */
+     * we should not assert anything about fmt, for the first packet.
+     * (when first packet, the chunk->msg is NULL).
+     * the fmt maybe 0/1/2/3, the FMLE will send a 0xC4 for some audio packet.
+     * the previous packet is:
+     *     04                // fmt=0, cid=4
+     *     00 00 1a          // timestamp=26
+     *     00 00 9d          // payload_length=157
+     *     08                // message_type=8(audio)
+     *     01 00 00 00       // stream_id=1
+     * the current packet maybe:
+     *     c4             // fmt=3, cid=4
+     * it's ok, for the packet is audio, and timestamp delta is 26.
+     * the current packet must be parsed as:
+     *     fmt=0, cid=4
+     *     timestamp=26+26=52
+     *     payload_length=157
+     *     message_type=8(audio)
+     *     stream_id=1
+     * so we must update the timestamp even fmt=3 for first packet.
+     */
     // fresh packet used to update the timestamp even fmt=3 for first packet.
     // fresh packet always means the chunk is the first one of message.
     bool is_first_chunk_of_msg = !chunk->msg;
     
-    // but, we can ensure that when a chunk stream is fresh, 
+    // but, we can ensure that when a chunk stream is fresh,
     // the fmt must be 0, a new stream.
     if (chunk->msg_count == 0 && fmt != RTMP_FMT_TYPE0) {
         // for librtmp, if ping, it will send a fresh stream with fmt=1,
@@ -1157,56 +1062,45 @@ int SrsProtocol::read_message_header(SrsChunkStream* chunk, char fmt)
             srs_warn("accept cid=2, fmt=1 to make librtmp happy.");
         } else {
             // must be a RTMP protocol level error.
-            ret = ERROR_RTMP_CHUNK_START;
-            srs_error("chunk stream is fresh, fmt must be %d, actual is %d. cid=%d, ret=%d", 
-                RTMP_FMT_TYPE0, fmt, chunk->cid, ret);
-            return ret;
+            return srs_error_new(ERROR_RTMP_CHUNK_START, "chunk is fresh, fmt must be %d, actual is %d. cid=%d", RTMP_FMT_TYPE0, fmt, chunk->cid);
         }
     }
-
+    
     // when exists cache msg, means got an partial message,
     // the fmt must not be type0 which means new message.
     if (chunk->msg && fmt == RTMP_FMT_TYPE0) {
-        ret = ERROR_RTMP_CHUNK_START;
-        srs_error("chunk stream exists, "
-            "fmt must not be %d, actual is %d. ret=%d", RTMP_FMT_TYPE0, fmt, ret);
-        return ret;
+        return srs_error_new(ERROR_RTMP_CHUNK_START, "chunk exists, fmt must not be %d, actual is %d", RTMP_FMT_TYPE0, fmt);
     }
     
     // create msg when new chunk stream start
     if (!chunk->msg) {
         chunk->msg = new SrsCommonMessage();
-        srs_verbose("create message for new chunk, fmt=%d, cid=%d", fmt, chunk->cid);
     }
-
+    
     // read message header from socket to buffer.
     static char mh_sizes[] = {11, 7, 3, 0};
     int mh_size = mh_sizes[(int)fmt];
-    srs_verbose("calc chunk message header size. fmt=%d, mh_size=%d", fmt, mh_size);
     
-    if (mh_size > 0 && (ret = in_buffer->grow(skt, mh_size)) != ERROR_SUCCESS) {
-        if (ret != ERROR_SOCKET_TIMEOUT && !srs_is_client_gracefully_close(ret)) {
-            srs_error("read %dbytes message header failed. ret=%d", mh_size, ret);
-        }
-        return ret;
+    if (mh_size > 0 && (err = in_buffer->grow(skt, mh_size)) != srs_success) {
+        return srs_error_wrap(err, "read %d bytes message header", mh_size);
     }
     
     /**
-    * parse the message header.
-    *   3bytes: timestamp delta,    fmt=0,1,2
-    *   3bytes: payload length,     fmt=0,1
-    *   1bytes: message type,       fmt=0,1
-    *   4bytes: stream id,          fmt=0
-    * where:
-    *   fmt=0, 0x0X
-    *   fmt=1, 0x4X
-    *   fmt=2, 0x8X
-    *   fmt=3, 0xCX
-    */
+     * parse the message header.
+     *   3bytes: timestamp delta,    fmt=0,1,2
+     *   3bytes: payload length,     fmt=0,1
+     *   1bytes: message type,       fmt=0,1
+     *   4bytes: stream id,          fmt=0
+     * where:
+     *   fmt=0, 0x0X
+     *   fmt=1, 0x4X
+     *   fmt=2, 0x8X
+     *   fmt=3, 0xCX
+     */
     // see also: ngx_rtmp_recv
     if (fmt <= RTMP_FMT_TYPE2) {
         char* p = in_buffer->read_slice(mh_size);
-    
+        
         char* pp = (char*)&chunk->header.timestamp_delta;
         pp[2] = *p++;
         pp[1] = *p++;
@@ -1260,14 +1154,10 @@ int SrsProtocol::read_message_header(SrsChunkStream* chunk, char fmt)
             
             // for a message, if msg exists in cache, the size must not changed.
             // always use the actual msg size to compare, for the cache payload length can changed,
-            // for the fmt type1(stream_id not changed), user can change the payload 
+            // for the fmt type1(stream_id not changed), user can change the payload
             // length(it's not allowed in the continue chunks).
             if (!is_first_chunk_of_msg && chunk->header.payload_length != payload_length) {
-                ret = ERROR_RTMP_PACKET_SIZE;
-                srs_error("msg exists in chunk cache, "
-                    "size=%d cannot change to %d, ret=%d", 
-                    chunk->header.payload_length, payload_length, ret);
-                return ret;
+                return srs_error_new(ERROR_RTMP_PACKET_SIZE, "msg in chunk cache, size=%d cannot change to %d", chunk->header.payload_length, payload_length);
             }
             
             chunk->header.payload_length = payload_length;
@@ -1279,87 +1169,69 @@ int SrsProtocol::read_message_header(SrsChunkStream* chunk, char fmt)
                 pp[1] = *p++;
                 pp[2] = *p++;
                 pp[3] = *p++;
-                srs_verbose("header read completed. fmt=%d, mh_size=%d, ext_time=%d, time=%"PRId64", payload=%d, type=%d, sid=%d", 
-                    fmt, mh_size, chunk->extended_timestamp, chunk->header.timestamp, chunk->header.payload_length, 
-                    chunk->header.message_type, chunk->header.stream_id);
-            } else {
-                srs_verbose("header read completed. fmt=%d, mh_size=%d, ext_time=%d, time=%"PRId64", payload=%d, type=%d", 
-                    fmt, mh_size, chunk->extended_timestamp, chunk->header.timestamp, chunk->header.payload_length, 
-                    chunk->header.message_type);
             }
-        } else {
-            srs_verbose("header read completed. fmt=%d, mh_size=%d, ext_time=%d, time=%"PRId64"", 
-                fmt, mh_size, chunk->extended_timestamp, chunk->header.timestamp);
         }
     } else {
         // update the timestamp even fmt=3 for first chunk packet
         if (is_first_chunk_of_msg && !chunk->extended_timestamp) {
             chunk->header.timestamp += chunk->header.timestamp_delta;
         }
-        srs_verbose("header read completed. fmt=%d, size=%d, ext_time=%d", 
-            fmt, mh_size, chunk->extended_timestamp);
     }
     
     // read extended-timestamp
     if (chunk->extended_timestamp) {
         mh_size += 4;
-        srs_verbose("read header ext time. fmt=%d, ext_time=%d, mh_size=%d", fmt, chunk->extended_timestamp, mh_size);
-        if ((ret = in_buffer->grow(skt, 4)) != ERROR_SUCCESS) {
-            if (ret != ERROR_SOCKET_TIMEOUT && !srs_is_client_gracefully_close(ret)) {
-                srs_error("read %dbytes message header failed. required_size=%d, ret=%d", mh_size, 4, ret);
-            }
-            return ret;
+        if ((err = in_buffer->grow(skt, 4)) != srs_success) {
+            return srs_error_wrap(err, "read 4 bytes ext timestamp");
         }
         // the ptr to the slice maybe invalid when grow()
         // reset the p to get 4bytes slice.
         char* p = in_buffer->read_slice(4);
-
-        u_int32_t timestamp = 0x00;
+        
+        uint32_t timestamp = 0x00;
         char* pp = (char*)&timestamp;
         pp[3] = *p++;
         pp[2] = *p++;
         pp[1] = *p++;
         pp[0] = *p++;
-
+        
         // always use 31bits timestamp, for some server may use 32bits extended timestamp.
         // @see https://github.com/ossrs/srs/issues/111
         timestamp &= 0x7fffffff;
         
         /**
-        * RTMP specification and ffmpeg/librtmp is false,
-        * but, adobe changed the specification, so flash/FMLE/FMS always true.
-        * default to true to support flash/FMLE/FMS.
-        * 
-        * ffmpeg/librtmp may donot send this filed, need to detect the value.
-        * @see also: http://blog.csdn.net/win_lin/article/details/13363699
-        * compare to the chunk timestamp, which is set by chunk message header
-        * type 0,1 or 2.
-        *
-        * @remark, nginx send the extended-timestamp in sequence-header,
-        * and timestamp delta in continue C1 chunks, and so compatible with ffmpeg,
-        * that is, there is no continue chunks and extended-timestamp in nginx-rtmp.
-        *
-        * @remark, srs always send the extended-timestamp, to keep simple,
-        * and compatible with adobe products.
-        */
-        u_int32_t chunk_timestamp = (u_int32_t)chunk->header.timestamp;
+         * RTMP specification and ffmpeg/librtmp is false,
+         * but, adobe changed the specification, so flash/FMLE/FMS always true.
+         * default to true to support flash/FMLE/FMS.
+         *
+         * ffmpeg/librtmp may donot send this filed, need to detect the value.
+         * @see also: http://blog.csdn.net/win_lin/article/details/13363699
+         * compare to the chunk timestamp, which is set by chunk message header
+         * type 0,1 or 2.
+         *
+         * @remark, nginx send the extended-timestamp in sequence-header,
+         * and timestamp delta in continue C1 chunks, and so compatible with ffmpeg,
+         * that is, there is no continue chunks and extended-timestamp in nginx-rtmp.
+         *
+         * @remark, srs always send the extended-timestamp, to keep simple,
+         * and compatible with adobe products.
+         */
+        uint32_t chunk_timestamp = (uint32_t)chunk->header.timestamp;
         
         /**
-        * if chunk_timestamp<=0, the chunk previous packet has no extended-timestamp,
-        * always use the extended timestamp.
-        */
+         * if chunk_timestamp<=0, the chunk previous packet has no extended-timestamp,
+         * always use the extended timestamp.
+         */
         /**
-        * about the is_first_chunk_of_msg.
-        * @remark, for the first chunk of message, always use the extended timestamp.
-        */
+         * about the is_first_chunk_of_msg.
+         * @remark, for the first chunk of message, always use the extended timestamp.
+         */
         if (!is_first_chunk_of_msg && chunk_timestamp > 0 && chunk_timestamp != timestamp) {
             mh_size -= 4;
             in_buffer->skip(-4);
-            srs_info("no 4bytes extended timestamp in the continued chunk");
         } else {
             chunk->header.timestamp = timestamp;
         }
-        srs_verbose("header read ext_time completed. time=%"PRId64"", chunk->header.timestamp);
     }
     
     // the extended-timestamp must be unsigned-int,
@@ -1369,9 +1241,9 @@ int SrsProtocol::read_message_header(SrsChunkStream* chunk, char fmt)
     //         3. Byte Order, Alignment, and Time Format
     //                Because timestamps are generally only 32 bits long, they will roll
     //                over after fewer than 50 days.
-    // 
+    //
     // but, its sample says the timestamp is 31bits:
-    //         An application could assume, for example, that all 
+    //         An application could assume, for example, that all
     //        adjacent timestamps are within 2^31 milliseconds of each other, so
     //        10000 comes after 4000000000, while 3000000000 comes before
     //        4000000000.
@@ -1394,76 +1266,60 @@ int SrsProtocol::read_message_header(SrsChunkStream* chunk, char fmt)
     // increase the msg count, the chunk stream can accept fmt=1/2/3 message now.
     chunk->msg_count++;
     
-    return ret;
+    return err;
 }
 
-int SrsProtocol::read_message_payload(SrsChunkStream* chunk, SrsCommonMessage** pmsg)
+srs_error_t SrsProtocol::read_message_payload(SrsChunkStream* chunk, SrsCommonMessage** pmsg)
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
     // empty message
     if (chunk->header.payload_length <= 0) {
-        srs_trace("get an empty RTMP "
-                "message(type=%d, size=%d, time=%"PRId64", sid=%d)", chunk->header.message_type, 
-                chunk->header.payload_length, chunk->header.timestamp, chunk->header.stream_id);
+        srs_trace("get an empty RTMP message(type=%d, size=%d, time=%" PRId64 ", sid=%d)", chunk->header.message_type,
+                  chunk->header.payload_length, chunk->header.timestamp, chunk->header.stream_id);
         
         *pmsg = chunk->msg;
         chunk->msg = NULL;
-                
-        return ret;
+        
+        return err;
     }
     srs_assert(chunk->header.payload_length > 0);
     
     // the chunk payload size.
     int payload_size = chunk->header.payload_length - chunk->msg->size;
     payload_size = srs_min(payload_size, in_chunk_size);
-    srs_verbose("chunk payload size is %d, message_size=%d, received_size=%d, in_chunk_size=%d", 
-        payload_size, chunk->header.payload_length, chunk->msg->size, in_chunk_size);
-
+    
     // create msg payload if not initialized
     if (!chunk->msg->payload) {
         chunk->msg->create_payload(chunk->header.payload_length);
     }
     
     // read payload to buffer
-    if ((ret = in_buffer->grow(skt, payload_size)) != ERROR_SUCCESS) {
-        if (ret != ERROR_SOCKET_TIMEOUT && !srs_is_client_gracefully_close(ret)) {
-            srs_error("read payload failed. required_size=%d, ret=%d", payload_size, ret);
-        }
-        return ret;
+    if ((err = in_buffer->grow(skt, payload_size)) != srs_success) {
+        return srs_error_wrap(err, "read %d bytes payload", payload_size);
     }
     memcpy(chunk->msg->payload + chunk->msg->size, in_buffer->read_slice(payload_size), payload_size);
     chunk->msg->size += payload_size;
-    
-    srs_verbose("chunk payload read completed. payload_size=%d", payload_size);
     
     // got entire RTMP message?
     if (chunk->header.payload_length == chunk->msg->size) {
         *pmsg = chunk->msg;
         chunk->msg = NULL;
-        srs_verbose("get entire RTMP message(type=%d, size=%d, time=%"PRId64", sid=%d)", 
-                chunk->header.message_type, chunk->header.payload_length, 
-                chunk->header.timestamp, chunk->header.stream_id);
-        return ret;
+        return err;
     }
     
-    srs_verbose("get partial RTMP message(type=%d, size=%d, time=%"PRId64", sid=%d), partial size=%d", 
-            chunk->header.message_type, chunk->header.payload_length, 
-            chunk->header.timestamp, chunk->header.stream_id,
-            chunk->msg->size);
-            
-    return ret;
+    return err;
 }
 
-int SrsProtocol::on_recv_message(SrsCommonMessage* msg)
+srs_error_t SrsProtocol::on_recv_message(SrsCommonMessage* msg)
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
     srs_assert(msg != NULL);
-        
+    
     // try to response acknowledgement
-    if ((ret = response_acknowledgement_message()) != ERROR_SUCCESS) {
-        return ret;
+    if ((err = response_acknowledgement_message()) != srs_success) {
+        return srs_error_wrap(err, "response ack");
     }
     
     SrsPacket* packet = NULL;
@@ -1471,17 +1327,15 @@ int SrsProtocol::on_recv_message(SrsCommonMessage* msg)
         case RTMP_MSG_SetChunkSize:
         case RTMP_MSG_UserControlMessage:
         case RTMP_MSG_WindowAcknowledgementSize:
-            if ((ret = decode_message(msg, &packet)) != ERROR_SUCCESS) {
-                srs_error("decode packet from message payload failed. ret=%d", ret);
-                return ret;
+            if ((err = decode_message(msg, &packet)) != srs_success) {
+                return srs_error_wrap(err, "decode message");
             }
-            srs_verbose("decode packet from message payload success.");
             break;
         case RTMP_MSG_VideoMessage:
         case RTMP_MSG_AudioMessage:
             print_debug_info();
         default:
-            return ret;
+            return err;
     }
     
     srs_assert(packet);
@@ -1497,39 +1351,29 @@ int SrsProtocol::on_recv_message(SrsCommonMessage* msg)
             if (pkt->ackowledgement_window_size > 0) {
                 in_ack_size.window = (uint32_t)pkt->ackowledgement_window_size;
                 // @remark, we ignore this message, for user noneed to care.
-                // but it's important for dev, for client/server will block if required 
+                // but it's important for dev, for client/server will block if required
                 // ack msg not arrived.
-                srs_info("set ack window size to %d", pkt->ackowledgement_window_size);
-            } else {
-                srs_warn("ignored. set ack window size is %d", pkt->ackowledgement_window_size);
             }
             break;
         }
         case RTMP_MSG_SetChunkSize: {
             SrsSetChunkSizePacket* pkt = dynamic_cast<SrsSetChunkSizePacket*>(packet);
             srs_assert(pkt != NULL);
-
+            
             // for some server, the actual chunk size can greater than the max value(65536),
             // so we just warning the invalid chunk size, and actually use it is ok,
             // @see: https://github.com/ossrs/srs/issues/160
-            if (pkt->chunk_size < SRS_CONSTS_RTMP_MIN_CHUNK_SIZE 
-                || pkt->chunk_size > SRS_CONSTS_RTMP_MAX_CHUNK_SIZE) 
-            {
+            if (pkt->chunk_size < SRS_CONSTS_RTMP_MIN_CHUNK_SIZE || pkt->chunk_size > SRS_CONSTS_RTMP_MAX_CHUNK_SIZE) {
                 srs_warn("accept chunk=%d, should in [%d, %d], please see #160",
-                    pkt->chunk_size, SRS_CONSTS_RTMP_MIN_CHUNK_SIZE,  SRS_CONSTS_RTMP_MAX_CHUNK_SIZE);
+                         pkt->chunk_size, SRS_CONSTS_RTMP_MIN_CHUNK_SIZE,  SRS_CONSTS_RTMP_MAX_CHUNK_SIZE);
             }
-
+            
             // @see: https://github.com/ossrs/srs/issues/541
             if (pkt->chunk_size < SRS_CONSTS_RTMP_MIN_CHUNK_SIZE) {
-                ret = ERROR_RTMP_CHUNK_SIZE;
-                srs_error("chunk size should be %d+, value=%d. ret=%d",
-                    SRS_CONSTS_RTMP_MIN_CHUNK_SIZE, pkt->chunk_size, ret);
-                return ret;
+                return srs_error_new(ERROR_RTMP_CHUNK_SIZE, "chunk size should be %d+, value=%d", SRS_CONSTS_RTMP_MIN_CHUNK_SIZE, pkt->chunk_size);
             }
             
             in_chunk_size = pkt->chunk_size;
-            srs_info("in.chunk=%d", pkt->chunk_size);
-
             break;
         }
         case RTMP_MSG_UserControlMessage: {
@@ -1538,12 +1382,10 @@ int SrsProtocol::on_recv_message(SrsCommonMessage* msg)
             
             if (pkt->event_type == SrcPCUCSetBufferLength) {
                 in_buffer_length = pkt->extra_data;
-                srs_info("buffer=%d, in.ack=%d, out.ack=%d, in.chunk=%d, out.chunk=%d", pkt->extra_data,
-                    in_ack_size.window, out_ack_size.window, in_chunk_size, out_chunk_size);
             }
             if (pkt->event_type == SrcPCUCPingRequest) {
-                if ((ret = response_ping_message(pkt->event_data)) != ERROR_SUCCESS) {
-                    return ret;
+                if ((err = response_ping_message(pkt->event_data)) != srs_success) {
+                    return srs_error_wrap(err, "response ping");
                 }
             }
             break;
@@ -1552,23 +1394,22 @@ int SrsProtocol::on_recv_message(SrsCommonMessage* msg)
             break;
     }
     
-    return ret;
+    return err;
 }
 
-int SrsProtocol::on_send_packet(SrsMessageHeader* mh, SrsPacket* packet)
+srs_error_t SrsProtocol::on_send_packet(SrsMessageHeader* mh, SrsPacket* packet)
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
     // ignore raw bytes oriented RTMP message.
     if (packet == NULL) {
-        return ret;
+        return err;
     }
     
     switch (mh->message_type) {
         case RTMP_MSG_SetChunkSize: {
             SrsSetChunkSizePacket* pkt = dynamic_cast<SrsSetChunkSizePacket*>(packet);
             out_chunk_size = pkt->chunk_size;
-            srs_info("out.chunk=%d", pkt->chunk_size);
             break;
         }
         case RTMP_MSG_WindowAcknowledgementSize: {
@@ -1608,21 +1449,21 @@ int SrsProtocol::on_send_packet(SrsMessageHeader* mh, SrsPacket* packet)
             break;
     }
     
-    return ret;
+    return err;
 }
 
-int SrsProtocol::response_acknowledgement_message()
+srs_error_t SrsProtocol::response_acknowledgement_message()
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
     if (in_ack_size.window <= 0) {
-        return ret;
+        return err;
     }
     
     // ignore when delta bytes not exceed half of window(ack size).
     uint32_t delta = (uint32_t)(skt->get_recv_bytes() - in_ack_size.nb_recv_bytes);
     if (delta < in_ack_size.window / 2) {
-        return ret;
+        return err;
     }
     in_ack_size.nb_recv_bytes = skt->get_recv_bytes();
     
@@ -1639,22 +1480,20 @@ int SrsProtocol::response_acknowledgement_message()
     // cache the message and use flush to send.
     if (!auto_response_when_recv) {
         manual_response_queue.push_back(pkt);
-        return ret;
+        return err;
     }
     
     // use underlayer api to send, donot flush again.
-    if ((ret = do_send_and_free_packet(pkt, 0)) != ERROR_SUCCESS) {
-        srs_error("send acknowledgement failed. ret=%d", ret);
-        return ret;
+    if ((err = do_send_and_free_packet(pkt, 0)) != srs_success) {
+        return srs_error_wrap(err, "send ack");
     }
-    srs_verbose("send acknowledgement success.");
     
-    return ret;
+    return err;
 }
 
-int SrsProtocol::response_ping_message(int32_t timestamp)
+srs_error_t SrsProtocol::response_ping_message(int32_t timestamp)
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
     srs_trace("get a ping request, response it. timestamp=%d", timestamp);
     
@@ -1666,17 +1505,15 @@ int SrsProtocol::response_ping_message(int32_t timestamp)
     // cache the message and use flush to send.
     if (!auto_response_when_recv) {
         manual_response_queue.push_back(pkt);
-        return ret;
+        return err;
     }
     
     // use underlayer api to send, donot flush again.
-    if ((ret = do_send_and_free_packet(pkt, 0)) != ERROR_SUCCESS) {
-        srs_error("send ping response failed. ret=%d", ret);
-        return ret;
+    if ((err = do_send_and_free_packet(pkt, 0)) != srs_success) {
+        return srs_error_wrap(err, "ping response");
     }
-    srs_verbose("send ping response success.");
     
-    return ret;
+    return err;
 }
 
 void SrsProtocol::print_debug_info()
@@ -1684,7 +1521,7 @@ void SrsProtocol::print_debug_info()
     if (show_debug_info) {
         show_debug_info = false;
         srs_trace("protocol in.buffer=%d, in.ack=%d, out.ack=%d, in.chunk=%d, out.chunk=%d", in_buffer_length,
-            in_ack_size.window, out_ack_size.window, in_chunk_size, out_chunk_size);
+                  in_ack_size.window, out_ack_size.window, in_chunk_size, out_chunk_size);
     }
 }
 
@@ -1706,6 +1543,7 @@ SrsRequest::SrsRequest()
 {
     objectEncoding = RTMP_SIG_AMF0_VER;
     duration = -1;
+    port = SRS_CONSTS_RTMP_DEFAULT_PORT;
     args = NULL;
 }
 
@@ -1719,6 +1557,7 @@ SrsRequest* SrsRequest::copy()
     SrsRequest* cp = new SrsRequest();
     
     cp->ip = ip;
+    cp->vhost = vhost;
     cp->app = app;
     cp->objectEncoding = objectEncoding;
     cp->pageUrl = pageUrl;
@@ -1729,7 +1568,6 @@ SrsRequest* SrsRequest::copy()
     cp->stream = stream;
     cp->swfUrl = swfUrl;
     cp->tcUrl = tcUrl;
-    cp->vhost = vhost;
     cp->duration = duration;
     if (args) {
         cp->args = args->copy()->to_object();
@@ -1743,6 +1581,17 @@ void SrsRequest::update_auth(SrsRequest* req)
     pageUrl = req->pageUrl;
     swfUrl = req->swfUrl;
     tcUrl = req->tcUrl;
+    param = req->param;
+    
+    ip = req->ip;
+    vhost = req->vhost;
+    app = req->app;
+    objectEncoding = req->objectEncoding;
+    host = req->host;
+    port = req->port;
+    param = req->param;
+    schema = req->schema;
+    duration = req->duration;
     
     if (args) {
         srs_freep(args);
@@ -1774,6 +1623,12 @@ void SrsRequest::strip()
     // remove start slash of app/stream
     app = srs_string_trim_start(app, "/");
     stream = srs_string_trim_start(stream, "/");
+}
+
+SrsRequest* SrsRequest::as_http()
+{
+    schema = "http";
+    return this;
 }
 
 SrsResponse::SrsResponse()
@@ -1813,105 +1668,95 @@ SrsHandshakeBytes::~SrsHandshakeBytes()
     srs_freepa(c2);
 }
 
-int SrsHandshakeBytes::read_c0c1(ISrsProtocolReaderWriter* io)
+srs_error_t SrsHandshakeBytes::read_c0c1(ISrsProtocolReadWriter* io)
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
     if (c0c1) {
-        return ret;
+        return err;
     }
     
     ssize_t nsize;
     
     c0c1 = new char[1537];
-    if ((ret = io->read_fully(c0c1, 1537, &nsize)) != ERROR_SUCCESS) {
-        srs_warn("read c0c1 failed. ret=%d", ret);
-        return ret;
+    if ((err = io->read_fully(c0c1, 1537, &nsize)) != srs_success) {
+        return srs_error_wrap(err, "read c0c1");
     }
-    srs_verbose("read c0c1 success.");
     
-    return ret;
+    return err;
 }
 
-int SrsHandshakeBytes::read_s0s1s2(ISrsProtocolReaderWriter* io)
+srs_error_t SrsHandshakeBytes::read_s0s1s2(ISrsProtocolReadWriter* io)
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
     if (s0s1s2) {
-        return ret;
+        return err;
     }
     
     ssize_t nsize;
     
     s0s1s2 = new char[3073];
-    if ((ret = io->read_fully(s0s1s2, 3073, &nsize)) != ERROR_SUCCESS) {
-        srs_warn("read s0s1s2 failed. ret=%d", ret);
-        return ret;
+    if ((err = io->read_fully(s0s1s2, 3073, &nsize)) != srs_success) {
+        return srs_error_wrap(err, "read s0s1s2");
     }
-    srs_verbose("read s0s1s2 success.");
     
-    return ret;
+    return err;
 }
 
-int SrsHandshakeBytes::read_c2(ISrsProtocolReaderWriter* io)
+srs_error_t SrsHandshakeBytes::read_c2(ISrsProtocolReadWriter* io)
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
     if (c2) {
-        return ret;
+        return err;
     }
     
     ssize_t nsize;
     
     c2 = new char[1536];
-    if ((ret = io->read_fully(c2, 1536, &nsize)) != ERROR_SUCCESS) {
-        srs_warn("read c2 failed. ret=%d", ret);
-        return ret;
+    if ((err = io->read_fully(c2, 1536, &nsize)) != srs_success) {
+        return srs_error_wrap(err, "read c2");
     }
-    srs_verbose("read c2 success.");
     
-    return ret;
+    return err;
 }
 
-int SrsHandshakeBytes::create_c0c1()
+srs_error_t SrsHandshakeBytes::create_c0c1()
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
     if (c0c1) {
-        return ret;
+        return err;
     }
     
     c0c1 = new char[1537];
     srs_random_generate(c0c1, 1537);
     
     // plain text required.
-    SrsStream stream;
-    if ((ret = stream.initialize(c0c1, 9)) != ERROR_SUCCESS) {
-        return ret;
-    }
+    SrsBuffer stream(c0c1, 9);
+    
     stream.write_1bytes(0x03);
     stream.write_4bytes((int32_t)::time(NULL));
     stream.write_4bytes(0x00);
     
-    return ret;
+    return err;
 }
 
-int SrsHandshakeBytes::create_s0s1s2(const char* c1)
+srs_error_t SrsHandshakeBytes::create_s0s1s2(const char* c1)
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
     if (s0s1s2) {
-        return ret;
+        return err;
     }
     
     s0s1s2 = new char[3073];
     srs_random_generate(s0s1s2, 3073);
     
     // plain text required.
-    SrsStream stream;
-    if ((ret = stream.initialize(s0s1s2, 9)) != ERROR_SUCCESS) {
-        return ret;
-    }
+    SrsBuffer stream(s0s1s2, 9);
+    
     stream.write_1bytes(0x03);
     stream.write_4bytes((int32_t)::time(NULL));
     // s1 time2 copy from c1
@@ -1925,35 +1770,39 @@ int SrsHandshakeBytes::create_s0s1s2(const char* c1)
         memcpy(s0s1s2 + 1537, c1, 1536);
     }
     
-    return ret;
+    return err;
 }
 
-int SrsHandshakeBytes::create_c2()
+srs_error_t SrsHandshakeBytes::create_c2()
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
     if (c2) {
-        return ret;
+        return err;
     }
     
     c2 = new char[1536];
     srs_random_generate(c2, 1536);
     
     // time
-    SrsStream stream;
-    if ((ret = stream.initialize(c2, 8)) != ERROR_SUCCESS) {
-        return ret;
-    }
+    SrsBuffer stream(c2, 8);
+    
     stream.write_4bytes((int32_t)::time(NULL));
     // c2 time2 copy from s1
     if (s0s1s2) {
         stream.write_bytes(s0s1s2 + 1, 4);
     }
     
-    return ret;
+    return err;
 }
 
-SrsRtmpClient::SrsRtmpClient(ISrsProtocolReaderWriter* skt)
+SrsServerInfo::SrsServerInfo()
+{
+    pid = cid = 0;
+    major = minor = revision = build = 0;
+}
+
+SrsRtmpClient::SrsRtmpClient(ISrsProtocolReadWriter* skt)
 {
     io = skt;
     protocol = new SrsProtocol(skt);
@@ -1966,14 +1815,14 @@ SrsRtmpClient::~SrsRtmpClient()
     srs_freep(hs_bytes);
 }
 
-void SrsRtmpClient::set_recv_timeout(int64_t timeout_us)
+void SrsRtmpClient::set_recv_timeout(int64_t tm)
 {
-    protocol->set_recv_timeout(timeout_us);
+    protocol->set_recv_timeout(tm);
 }
 
-void SrsRtmpClient::set_send_timeout(int64_t timeout_us)
+void SrsRtmpClient::set_send_timeout(int64_t tm)
 {
-    protocol->set_send_timeout(timeout_us);
+    protocol->set_send_timeout(tm);
 }
 
 int64_t SrsRtmpClient::get_recv_bytes()
@@ -1986,34 +1835,34 @@ int64_t SrsRtmpClient::get_send_bytes()
     return protocol->get_send_bytes();
 }
 
-int SrsRtmpClient::recv_message(SrsCommonMessage** pmsg)
+srs_error_t SrsRtmpClient::recv_message(SrsCommonMessage** pmsg)
 {
     return protocol->recv_message(pmsg);
 }
 
-int SrsRtmpClient::decode_message(SrsCommonMessage* msg, SrsPacket** ppacket)
+srs_error_t SrsRtmpClient::decode_message(SrsCommonMessage* msg, SrsPacket** ppacket)
 {
     return protocol->decode_message(msg, ppacket);
 }
 
-int SrsRtmpClient::send_and_free_message(SrsSharedPtrMessage* msg, int stream_id)
+srs_error_t SrsRtmpClient::send_and_free_message(SrsSharedPtrMessage* msg, int stream_id)
 {
     return protocol->send_and_free_message(msg, stream_id);
 }
 
-int SrsRtmpClient::send_and_free_messages(SrsSharedPtrMessage** msgs, int nb_msgs, int stream_id)
+srs_error_t SrsRtmpClient::send_and_free_messages(SrsSharedPtrMessage** msgs, int nb_msgs, int stream_id)
 {
     return protocol->send_and_free_messages(msgs, nb_msgs, stream_id);
 }
 
-int SrsRtmpClient::send_and_free_packet(SrsPacket* packet, int stream_id)
+srs_error_t SrsRtmpClient::send_and_free_packet(SrsPacket* packet, int stream_id)
 {
     return protocol->send_and_free_packet(packet, stream_id);
 }
 
-int SrsRtmpClient::handshake()
+srs_error_t SrsRtmpClient::handshake()
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
     srs_assert(hs_bytes);
     
@@ -2022,79 +1871,63 @@ int SrsRtmpClient::handshake()
     SrsComplexHandshake* complex_hs = new SrsComplexHandshake();
     SrsAutoFree(SrsComplexHandshake, complex_hs);
     
-    if ((ret = complex_hs->handshake_with_server(hs_bytes, io)) != ERROR_SUCCESS) {
-        if (ret == ERROR_RTMP_TRY_SIMPLE_HS) {
+    if ((err = complex_hs->handshake_with_server(hs_bytes, io)) != srs_success) {
+        if (srs_error_code(err) == ERROR_RTMP_TRY_SIMPLE_HS) {
+            srs_freep(err);
+            
             // always alloc object at heap.
             // @see https://github.com/ossrs/srs/issues/509
             SrsSimpleHandshake* simple_hs = new SrsSimpleHandshake();
             SrsAutoFree(SrsSimpleHandshake, simple_hs);
             
-            if ((ret = simple_hs->handshake_with_server(hs_bytes, io)) != ERROR_SUCCESS) {
-                return ret;
+            if ((err = simple_hs->handshake_with_server(hs_bytes, io)) != srs_success) {
+                return srs_error_wrap(err, "simple handshake");
             }
+        } else {
+            return srs_error_wrap(err, "complex handshake");
         }
-        return ret;
     }
     
     srs_freep(hs_bytes);
     
-    return ret;
+    return err;
 }
 
-int SrsRtmpClient::simple_handshake()
+srs_error_t SrsRtmpClient::simple_handshake()
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
     srs_assert(hs_bytes);
     
     SrsSimpleHandshake simple_hs;
-    if ((ret = simple_hs.handshake_with_server(hs_bytes, io)) != ERROR_SUCCESS) {
-        return ret;
+    if ((err = simple_hs.handshake_with_server(hs_bytes, io)) != srs_success) {
+        return srs_error_wrap(err, "simple handshake");
     }
     
     srs_freep(hs_bytes);
     
-    return ret;
+    return err;
 }
 
-int SrsRtmpClient::complex_handshake()
+srs_error_t SrsRtmpClient::complex_handshake()
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
     srs_assert(hs_bytes);
     
     SrsComplexHandshake complex_hs;
-    if ((ret = complex_hs.handshake_with_server(hs_bytes, io)) != ERROR_SUCCESS) {
-        return ret;
+    if ((err = complex_hs.handshake_with_server(hs_bytes, io)) != srs_success) {
+        return srs_error_wrap(err, "complex handshake");
     }
     
     srs_freep(hs_bytes);
     
-    return ret;
+    return err;
 }
 
-int SrsRtmpClient::connect_app(string app, string tc_url, SrsRequest* req, bool debug_srs_upnode)
+srs_error_t SrsRtmpClient::connect_app(string app, string tcUrl, SrsRequest* r, bool dsu, SrsServerInfo* si)
 {
-    std::string srs_server_ip;
-    std::string srs_server;
-    std::string srs_primary;
-    std::string srs_authors;
-    std::string srs_version;
-    int srs_id = 0;
-    int srs_pid = 0;
-    
-    return connect_app2(app, tc_url, req, debug_srs_upnode,
-        srs_server_ip, srs_server, srs_primary, srs_authors,
-        srs_version, srs_id, srs_pid);
-}
-
-int SrsRtmpClient::connect_app2(
-    string app, string tc_url, SrsRequest* req, bool debug_srs_upnode,
-    string& srs_server_ip, string& srs_server, string& srs_primary,
-    string& srs_authors, string& srs_version, int& srs_id,
-    int& srs_pid
-){
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
     // Connect(vhost, app)
     if (true) {
@@ -2102,23 +1935,23 @@ int SrsRtmpClient::connect_app2(
         
         pkt->command_object->set("app", SrsAmf0Any::str(app.c_str()));
         pkt->command_object->set("flashVer", SrsAmf0Any::str("WIN 15,0,0,239"));
-        if (req) {
-            pkt->command_object->set("swfUrl", SrsAmf0Any::str(req->swfUrl.c_str()));
+        if (r) {
+            pkt->command_object->set("swfUrl", SrsAmf0Any::str(r->swfUrl.c_str()));
         } else {
             pkt->command_object->set("swfUrl", SrsAmf0Any::str());
         }
-        if (req && req->tcUrl != "") {
-            pkt->command_object->set("tcUrl", SrsAmf0Any::str(req->tcUrl.c_str()));
+        if (r && r->tcUrl != "") {
+            pkt->command_object->set("tcUrl", SrsAmf0Any::str(r->tcUrl.c_str()));
         } else {
-            pkt->command_object->set("tcUrl", SrsAmf0Any::str(tc_url.c_str()));
+            pkt->command_object->set("tcUrl", SrsAmf0Any::str(tcUrl.c_str()));
         }
         pkt->command_object->set("fpad", SrsAmf0Any::boolean(false));
         pkt->command_object->set("capabilities", SrsAmf0Any::number(239));
         pkt->command_object->set("audioCodecs", SrsAmf0Any::number(3575));
         pkt->command_object->set("videoCodecs", SrsAmf0Any::number(252));
         pkt->command_object->set("videoFunction", SrsAmf0Any::number(1));
-        if (req) {
-            pkt->command_object->set("pageUrl", SrsAmf0Any::str(req->pageUrl.c_str()));
+        if (r) {
+            pkt->command_object->set("pageUrl", SrsAmf0Any::str(r->pageUrl.c_str()));
         } else {
             pkt->command_object->set("pageUrl", SrsAmf0Any::str());
         }
@@ -2126,13 +1959,13 @@ int SrsRtmpClient::connect_app2(
         
         // @see https://github.com/ossrs/srs/issues/160
         // the debug_srs_upnode is config in vhost and default to true.
-        if (debug_srs_upnode && req && req->args) {
+        if (dsu && r && r->args) {
             srs_freep(pkt->args);
-            pkt->args = req->args->copy()->to_object();
+            pkt->args = r->args->copy()->to_object();
         }
         
-        if ((ret = protocol->send_and_free_packet(pkt, 0)) != ERROR_SUCCESS) {
-            return ret;
+        if ((err = protocol->send_and_free_packet(pkt, 0)) != srs_success) {
+            return srs_error_wrap(err, "send packet");
         }
     }
     
@@ -2140,64 +1973,74 @@ int SrsRtmpClient::connect_app2(
     if (true) {
         SrsSetWindowAckSizePacket* pkt = new SrsSetWindowAckSizePacket();
         pkt->ackowledgement_window_size = 2500000;
-        if ((ret = protocol->send_and_free_packet(pkt, 0)) != ERROR_SUCCESS) {
-            return ret;
+        if ((err = protocol->send_and_free_packet(pkt, 0)) != srs_success) {
+            return srs_error_wrap(err, "send packet");
         }
     }
     
     // expect connect _result
     SrsCommonMessage* msg = NULL;
     SrsConnectAppResPacket* pkt = NULL;
-    if ((ret = expect_message<SrsConnectAppResPacket>(&msg, &pkt)) != ERROR_SUCCESS) {
-        srs_error("expect connect app response message failed. ret=%d", ret);
-        return ret;
+    if ((err = expect_message<SrsConnectAppResPacket>(&msg, &pkt)) != srs_success) {
+        return srs_error_wrap(err, "expect connect app response");
     }
     SrsAutoFree(SrsCommonMessage, msg);
     SrsAutoFree(SrsConnectAppResPacket, pkt);
     
     // server info
     SrsAmf0Any* data = pkt->info->get_property("data");
-    if (data && data->is_ecma_array()) {
+    if (si && data && data->is_ecma_array()) {
         SrsAmf0EcmaArray* arr = data->to_ecma_array();
         
         SrsAmf0Any* prop = NULL;
-        if ((prop = arr->ensure_property_string("srs_primary")) != NULL) {
-            srs_primary = prop->to_str();
-        }
-        if ((prop = arr->ensure_property_string("srs_authors")) != NULL) {
-            srs_authors = prop->to_str();
-        }
-        if ((prop = arr->ensure_property_string("srs_version")) != NULL) {
-            srs_version = prop->to_str();
-        }
         if ((prop = arr->ensure_property_string("srs_server_ip")) != NULL) {
-            srs_server_ip = prop->to_str();
+            si->ip = prop->to_str();
         }
         if ((prop = arr->ensure_property_string("srs_server")) != NULL) {
-            srs_server = prop->to_str();
+            si->sig = prop->to_str();
         }
         if ((prop = arr->ensure_property_number("srs_id")) != NULL) {
-            srs_id = (int)prop->to_number();
+            si->cid = (int)prop->to_number();
         }
         if ((prop = arr->ensure_property_number("srs_pid")) != NULL) {
-            srs_pid = (int)prop->to_number();
+            si->pid = (int)prop->to_number();
+        }
+        if ((prop = arr->ensure_property_string("srs_version")) != NULL) {
+            vector<string> versions = srs_string_split(prop->to_str(), ".");
+            if (versions.size() > 0) {
+                si->major = ::atoi(versions.at(0).c_str());
+                if (versions.size() > 1) {
+                    si->minor = ::atoi(versions.at(1).c_str());
+                    if (versions.size() > 2) {
+                        si->revision = ::atoi(versions.at(2).c_str());
+                        if (versions.size() > 3) {
+                            si->build = ::atoi(versions.at(3).c_str());
+                        }
+                    }
+                }
+            }
         }
     }
-    srs_trace("connected, version=%s, ip=%s, pid=%d, id=%d, dsu=%d",
-              srs_version.c_str(), srs_server_ip.c_str(), srs_pid, srs_id, debug_srs_upnode);
     
-    return ret;
+    if (si) {
+        srs_trace("connected, version=%d.%d.%d.%d, ip=%s, pid=%d, id=%d, dsu=%d",
+                  si->major, si->minor, si->revision, si->build, si->ip.c_str(), si->pid, si->cid, dsu);
+    } else {
+        srs_trace("connected, dsu=%d", dsu);
+    }
+    
+    return err;
 }
 
-int SrsRtmpClient::create_stream(int& stream_id)
+srs_error_t SrsRtmpClient::create_stream(int& stream_id)
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
     // CreateStream
     if (true) {
         SrsCreateStreamPacket* pkt = new SrsCreateStreamPacket();
-        if ((ret = protocol->send_and_free_packet(pkt, 0)) != ERROR_SUCCESS) {
-            return ret;
+        if ((err = protocol->send_and_free_packet(pkt, 0)) != srs_success) {
+            return srs_error_wrap(err, "send packet");
         }
     }
     
@@ -2205,33 +2048,28 @@ int SrsRtmpClient::create_stream(int& stream_id)
     if (true) {
         SrsCommonMessage* msg = NULL;
         SrsCreateStreamResPacket* pkt = NULL;
-        if ((ret = expect_message<SrsCreateStreamResPacket>(&msg, &pkt)) != ERROR_SUCCESS) {
-            srs_error("expect create stream response message failed. ret=%d", ret);
-            return ret;
+        if ((err = expect_message<SrsCreateStreamResPacket>(&msg, &pkt)) != srs_success) {
+            return srs_error_wrap(err, "expect create stream response");
         }
         SrsAutoFree(SrsCommonMessage, msg);
         SrsAutoFree(SrsCreateStreamResPacket, pkt);
-        srs_info("get create stream response message");
         
         stream_id = (int)pkt->stream_id;
     }
     
-    return ret;
+    return err;
 }
 
-int SrsRtmpClient::play(string stream, int stream_id)
+srs_error_t SrsRtmpClient::play(string stream, int stream_id, int chunk_size)
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
     // Play(stream)
     if (true) {
         SrsPlayPacket* pkt = new SrsPlayPacket();
         pkt->stream_name = stream;
-        if ((ret = protocol->send_and_free_packet(pkt, stream_id)) != ERROR_SUCCESS) {
-            srs_error("send play stream failed. "
-                "stream=%s, stream_id=%d, ret=%d", 
-                stream.c_str(), stream_id, ret);
-            return ret;
+        if ((err = protocol->send_and_free_packet(pkt, stream_id)) != srs_success) {
+            return srs_error_wrap(err, "send play stream failed. stream=%s, stream_id=%d", stream.c_str(), stream_id);
         }
     }
     
@@ -2244,42 +2082,33 @@ int SrsRtmpClient::play(string stream, int stream_id)
         pkt->event_data = stream_id;
         pkt->extra_data = buffer_length_ms;
         
-        if ((ret = protocol->send_and_free_packet(pkt, 0)) != ERROR_SUCCESS) {
-            srs_error("send set buffer length failed. "
-                "stream=%s, stream_id=%d, bufferLength=%d, ret=%d", 
-                stream.c_str(), stream_id, buffer_length_ms, ret);
-            return ret;
+        if ((err = protocol->send_and_free_packet(pkt, 0)) != srs_success) {
+            return srs_error_wrap(err, "send set buffer length failed. stream=%s, stream_id=%d, bufferLength=%d", stream.c_str(), stream_id, buffer_length_ms);
         }
     }
     
     // SetChunkSize
-    if (true) {
+    if (chunk_size != SRS_CONSTS_RTMP_PROTOCOL_CHUNK_SIZE) {
         SrsSetChunkSizePacket* pkt = new SrsSetChunkSizePacket();
-        pkt->chunk_size = SRS_CONSTS_RTMP_SRS_CHUNK_SIZE;
-        if ((ret = protocol->send_and_free_packet(pkt, 0)) != ERROR_SUCCESS) {
-            srs_error("send set chunk size failed. "
-                "stream=%s, chunk_size=%d, ret=%d", 
-                stream.c_str(), SRS_CONSTS_RTMP_SRS_CHUNK_SIZE, ret);
-            return ret;
+        pkt->chunk_size = chunk_size;
+        if ((err = protocol->send_and_free_packet(pkt, 0)) != srs_success) {
+            return srs_error_wrap(err, "send set chunk size failed. stream=%s, chunk_size=%d", stream.c_str(), chunk_size);
         }
     }
     
-    return ret;
+    return err;
 }
 
-int SrsRtmpClient::publish(string stream, int stream_id)
+srs_error_t SrsRtmpClient::publish(string stream, int stream_id, int chunk_size)
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
     // SetChunkSize
-    if (true) {
+    if (chunk_size != SRS_CONSTS_RTMP_PROTOCOL_CHUNK_SIZE) {
         SrsSetChunkSizePacket* pkt = new SrsSetChunkSizePacket();
-        pkt->chunk_size = SRS_CONSTS_RTMP_SRS_CHUNK_SIZE;
-        if ((ret = protocol->send_and_free_packet(pkt, 0)) != ERROR_SUCCESS) {
-            srs_error("send set chunk size failed. "
-                "stream=%s, chunk_size=%d, ret=%d", 
-                stream.c_str(), SRS_CONSTS_RTMP_SRS_CHUNK_SIZE, ret);
-            return ret;
+        pkt->chunk_size = chunk_size;
+        if ((err = protocol->send_and_free_packet(pkt, 0)) != srs_success) {
+            return srs_error_wrap(err, "send set chunk size failed. stream=%s, chunk_size=%d", stream.c_str(), chunk_size);
         }
     }
     
@@ -2287,40 +2116,33 @@ int SrsRtmpClient::publish(string stream, int stream_id)
     if (true) {
         SrsPublishPacket* pkt = new SrsPublishPacket();
         pkt->stream_name = stream;
-        if ((ret = protocol->send_and_free_packet(pkt, stream_id)) != ERROR_SUCCESS) {
-            srs_error("send publish message failed. "
-                "stream=%s, stream_id=%d, ret=%d", 
-                stream.c_str(), stream_id, ret);
-            return ret;
+        if ((err = protocol->send_and_free_packet(pkt, stream_id)) != srs_success) {
+            return srs_error_wrap(err, "send publish message failed. stream=%s, stream_id=%d", stream.c_str(), stream_id);
         }
     }
     
-    return ret;
+    return err;
 }
 
-int SrsRtmpClient::fmle_publish(string stream, int& stream_id)
+srs_error_t SrsRtmpClient::fmle_publish(string stream, int& stream_id)
 {
     stream_id = 0;
     
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
     // SrsFMLEStartPacket
     if (true) {
         SrsFMLEStartPacket* pkt = SrsFMLEStartPacket::create_release_stream(stream);
-        if ((ret = protocol->send_and_free_packet(pkt, 0)) != ERROR_SUCCESS) {
-            srs_error("send FMLE publish "
-                "release stream failed. stream=%s, ret=%d", stream.c_str(), ret);
-            return ret;
+        if ((err = protocol->send_and_free_packet(pkt, 0)) != srs_success) {
+            return srs_error_wrap(err, "send FMLE publish release stream failed. stream=%s", stream.c_str());
         }
     }
     
     // FCPublish
     if (true) {
         SrsFMLEStartPacket* pkt = SrsFMLEStartPacket::create_FC_publish(stream);
-        if ((ret = protocol->send_and_free_packet(pkt, 0)) != ERROR_SUCCESS) {
-            srs_error("send FMLE publish "
-                "FCPublish failed. stream=%s, ret=%d", stream.c_str(), ret);
-            return ret;
+        if ((err = protocol->send_and_free_packet(pkt, 0)) != srs_success) {
+            return srs_error_wrap(err, "send FMLE publish FCPublish failed. stream=%s", stream.c_str());
         }
     }
     
@@ -2328,10 +2150,8 @@ int SrsRtmpClient::fmle_publish(string stream, int& stream_id)
     if (true) {
         SrsCreateStreamPacket* pkt = new SrsCreateStreamPacket();
         pkt->transaction_id = 4;
-        if ((ret = protocol->send_and_free_packet(pkt, 0)) != ERROR_SUCCESS) {
-            srs_error("send FMLE publish "
-                "createStream failed. stream=%s, ret=%d", stream.c_str(), ret);
-            return ret;
+        if ((err = protocol->send_and_free_packet(pkt, 0)) != srs_success) {
+            return srs_error_wrap(err, "send FMLE publish createStream failed. stream=%s", stream.c_str());
         }
     }
     
@@ -2339,14 +2159,12 @@ int SrsRtmpClient::fmle_publish(string stream, int& stream_id)
     if (true) {
         SrsCommonMessage* msg = NULL;
         SrsCreateStreamResPacket* pkt = NULL;
-        if ((ret = expect_message<SrsCreateStreamResPacket>(&msg, &pkt)) != ERROR_SUCCESS) {
-            srs_error("expect create stream response message failed. ret=%d", ret);
-            return ret;
+        if ((err = expect_message<SrsCreateStreamResPacket>(&msg, &pkt)) != srs_success) {
+            return srs_error_wrap(err, "expect create stream response message failed");
         }
         SrsAutoFree(SrsCommonMessage, msg);
         SrsAutoFree(SrsCreateStreamResPacket, pkt);
-        srs_info("get create stream response message");
-
+        
         stream_id = (int)pkt->stream_id;
     }
     
@@ -2354,17 +2172,15 @@ int SrsRtmpClient::fmle_publish(string stream, int& stream_id)
     if (true) {
         SrsPublishPacket* pkt = new SrsPublishPacket();
         pkt->stream_name = stream;
-        if ((ret = protocol->send_and_free_packet(pkt, stream_id)) != ERROR_SUCCESS) {
-            srs_error("send FMLE publish publish failed. "
-                "stream=%s, stream_id=%d, ret=%d", stream.c_str(), stream_id, ret);
-            return ret;
+        if ((err = protocol->send_and_free_packet(pkt, stream_id)) != srs_success) {
+            return srs_error_wrap(err, "send FMLE publish publish failed. stream=%s, stream_id=%d", stream.c_str(), stream_id);
         }
     }
     
-    return ret;
+    return err;
 }
 
-SrsRtmpServer::SrsRtmpServer(ISrsProtocolReaderWriter* skt)
+SrsRtmpServer::SrsRtmpServer(ISrsProtocolReadWriter* skt)
 {
     io = skt;
     protocol = new SrsProtocol(skt);
@@ -2394,9 +2210,9 @@ void SrsRtmpServer::set_recv_buffer(int buffer_size)
 }
 #endif
 
-void SrsRtmpServer::set_recv_timeout(int64_t timeout_us)
+void SrsRtmpServer::set_recv_timeout(int64_t tm)
 {
-    protocol->set_recv_timeout(timeout_us);
+    protocol->set_recv_timeout(tm);
 }
 
 int64_t SrsRtmpServer::get_recv_timeout()
@@ -2404,9 +2220,9 @@ int64_t SrsRtmpServer::get_recv_timeout()
     return protocol->get_recv_timeout();
 }
 
-void SrsRtmpServer::set_send_timeout(int64_t timeout_us)
+void SrsRtmpServer::set_send_timeout(int64_t tm)
 {
-    protocol->set_send_timeout(timeout_us);
+    protocol->set_send_timeout(tm);
 }
 
 int64_t SrsRtmpServer::get_send_timeout()
@@ -2424,73 +2240,72 @@ int64_t SrsRtmpServer::get_send_bytes()
     return protocol->get_send_bytes();
 }
 
-int SrsRtmpServer::recv_message(SrsCommonMessage** pmsg)
+srs_error_t SrsRtmpServer::recv_message(SrsCommonMessage** pmsg)
 {
     return protocol->recv_message(pmsg);
 }
 
-int SrsRtmpServer::decode_message(SrsCommonMessage* msg, SrsPacket** ppacket)
+srs_error_t SrsRtmpServer::decode_message(SrsCommonMessage* msg, SrsPacket** ppacket)
 {
     return protocol->decode_message(msg, ppacket);
 }
 
-int SrsRtmpServer::send_and_free_message(SrsSharedPtrMessage* msg, int stream_id)
+srs_error_t SrsRtmpServer::send_and_free_message(SrsSharedPtrMessage* msg, int stream_id)
 {
     return protocol->send_and_free_message(msg, stream_id);
 }
 
-int SrsRtmpServer::send_and_free_messages(SrsSharedPtrMessage** msgs, int nb_msgs, int stream_id)
+srs_error_t SrsRtmpServer::send_and_free_messages(SrsSharedPtrMessage** msgs, int nb_msgs, int stream_id)
 {
     return protocol->send_and_free_messages(msgs, nb_msgs, stream_id);
 }
 
-int SrsRtmpServer::send_and_free_packet(SrsPacket* packet, int stream_id)
+srs_error_t SrsRtmpServer::send_and_free_packet(SrsPacket* packet, int stream_id)
 {
     return protocol->send_and_free_packet(packet, stream_id);
 }
 
-int SrsRtmpServer::handshake()
+srs_error_t SrsRtmpServer::handshake()
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
     srs_assert(hs_bytes);
     
     SrsComplexHandshake complex_hs;
-    if ((ret = complex_hs.handshake_with_client(hs_bytes, io)) != ERROR_SUCCESS) {
-        if (ret == ERROR_RTMP_TRY_SIMPLE_HS) {
+    if ((err = complex_hs.handshake_with_client(hs_bytes, io)) != srs_success) {
+        if (srs_error_code(err) == ERROR_RTMP_TRY_SIMPLE_HS) {
+            srs_freep(err);
+            
             SrsSimpleHandshake simple_hs;
-            if ((ret = simple_hs.handshake_with_client(hs_bytes, io)) != ERROR_SUCCESS) {
-                return ret;
+            if ((err = simple_hs.handshake_with_client(hs_bytes, io)) != srs_success) {
+                return srs_error_wrap(err, "simple handshake");
             }
+        } else {
+            return srs_error_wrap(err, "complex handshake");
         }
-        return ret;
     }
     
     srs_freep(hs_bytes);
     
-    return ret;
+    return err;
 }
 
-int SrsRtmpServer::connect_app(SrsRequest* req)
+srs_error_t SrsRtmpServer::connect_app(SrsRequest* req)
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
     SrsCommonMessage* msg = NULL;
     SrsConnectAppPacket* pkt = NULL;
-    if ((ret = expect_message<SrsConnectAppPacket>(&msg, &pkt)) != ERROR_SUCCESS) {
-        srs_error("expect connect app message failed. ret=%d", ret);
-        return ret;
+    if ((err = expect_message<SrsConnectAppPacket>(&msg, &pkt)) != srs_success) {
+        return srs_error_wrap(err, "expect connect app response");
     }
     SrsAutoFree(SrsCommonMessage, msg);
     SrsAutoFree(SrsConnectAppPacket, pkt);
-    srs_info("get connect app message");
     
     SrsAmf0Any* prop = NULL;
     
     if ((prop = pkt->command_object->ensure_property_string("tcUrl")) == NULL) {
-        ret = ERROR_RTMP_REQ_CONNECT;
-        srs_error("invalid request, must specifies the tcUrl. ret=%d", ret);
-        return ret;
+        return srs_error_new(ERROR_RTMP_REQ_CONNECT, "invalid request without tcUrl");
     }
     req->tcUrl = prop->to_str();
     
@@ -2509,58 +2324,53 @@ int SrsRtmpServer::connect_app(SrsRequest* req)
     if (pkt->args) {
         srs_freep(req->args);
         req->args = pkt->args->copy()->to_object();
-        srs_info("copy edge traverse to origin auth args.");
     }
     
-    srs_info("get connect app message params success.");
-    
-    srs_discovery_tc_url(req->tcUrl, 
-        req->schema, req->host, req->vhost, req->app, req->stream, req->port,
-        req->param);
+    srs_discovery_tc_url(req->tcUrl, req->schema, req->host, req->vhost, req->app, req->stream, req->port, req->param);
     req->strip();
     
-    return ret;
+    return err;
 }
 
-int SrsRtmpServer::set_window_ack_size(int ack_size)
+srs_error_t SrsRtmpServer::set_window_ack_size(int ack_size)
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
     SrsSetWindowAckSizePacket* pkt = new SrsSetWindowAckSizePacket();
     pkt->ackowledgement_window_size = ack_size;
-    if ((ret = protocol->send_and_free_packet(pkt, 0)) != ERROR_SUCCESS) {
-        srs_error("send ack size message failed. ret=%d", ret);
-        return ret;
+    if ((err = protocol->send_and_free_packet(pkt, 0)) != srs_success) {
+        return srs_error_wrap(err, "send ack");
     }
-    srs_info("send ack size message success. ack_size=%d", ack_size);
     
-    return ret;
+    return err;
 }
 
-int SrsRtmpServer::set_peer_bandwidth(int bandwidth, int type)
+srs_error_t SrsRtmpServer::set_in_window_ack_size(int ack_size)
 {
-    int ret = ERROR_SUCCESS;
+    return protocol->set_in_window_ack_size(ack_size);
+}
+
+srs_error_t SrsRtmpServer::set_peer_bandwidth(int bandwidth, int type)
+{
+    srs_error_t err = srs_success;
     
     SrsSetPeerBandwidthPacket* pkt = new SrsSetPeerBandwidthPacket();
     pkt->bandwidth = bandwidth;
     pkt->type = type;
-    if ((ret = protocol->send_and_free_packet(pkt, 0)) != ERROR_SUCCESS) {
-        srs_error("send set bandwidth message failed. ret=%d", ret);
-        return ret;
+    if ((err = protocol->send_and_free_packet(pkt, 0)) != srs_success) {
+        return srs_error_wrap(err, "send set peer bandwidth");
     }
-    srs_info("send set bandwidth message "
-        "success. bandwidth=%d, type=%d", bandwidth, type);
     
-    return ret;
+    return err;
 }
 
-int SrsRtmpServer::response_connect_app(SrsRequest *req, const char* server_ip)
+srs_error_t SrsRtmpServer::response_connect_app(SrsRequest *req, const char* server_ip)
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
     SrsConnectAppResPacket* pkt = new SrsConnectAppResPacket();
     
-    pkt->props->set("fmsVer", SrsAmf0Any::str("FMS/"RTMP_SIG_FMS_VER));
+    pkt->props->set("fmsVer", SrsAmf0Any::str("FMS/" RTMP_SIG_FMS_VER));
     pkt->props->set("capabilities", SrsAmf0Any::number(127));
     pkt->props->set("mode", SrsAmf0Any::number(1));
     
@@ -2591,61 +2401,101 @@ int SrsRtmpServer::response_connect_app(SrsRequest *req, const char* server_ip)
     data->set("srs_pid", SrsAmf0Any::number(getpid()));
     data->set("srs_id", SrsAmf0Any::number(_srs_context->get_id()));
     
-    if ((ret = protocol->send_and_free_packet(pkt, 0)) != ERROR_SUCCESS) {
-        srs_error("send connect app response message failed. ret=%d", ret);
-        return ret;
+    if ((err = protocol->send_and_free_packet(pkt, 0)) != srs_success) {
+        return srs_error_wrap(err, "send connect app response");
     }
-    srs_info("send connect app response message success.");
     
-    return ret;
+    return err;
+}
+
+#define SRS_RTMP_REDIRECT_TMMS 3000
+srs_error_t SrsRtmpServer::redirect(SrsRequest* r, string host, int port, bool& accepted)
+{
+    srs_error_t err = srs_success;
+    
+    if (true) {
+        string url = srs_generate_rtmp_url(host, port, r->host, r->vhost, r->app, r->stream, r->param);
+        
+        SrsAmf0Object* ex = SrsAmf0Any::object();
+        ex->set("code", SrsAmf0Any::number(302));
+        ex->set("redirect", SrsAmf0Any::str(url.c_str()));
+        
+        SrsOnStatusCallPacket* pkt = new SrsOnStatusCallPacket();
+        
+        pkt->data->set(StatusLevel, SrsAmf0Any::str(StatusLevelError));
+        pkt->data->set(StatusCode, SrsAmf0Any::str(StatusCodeConnectRejected));
+        pkt->data->set(StatusDescription, SrsAmf0Any::str("RTMP 302 Redirect"));
+        pkt->data->set("ex", ex);
+        
+        if ((err = protocol->send_and_free_packet(pkt, 0)) != srs_success) {
+            return srs_error_wrap(err, "send redirect/reject");
+        }
+    }
+    
+    // client must response a call message.
+    // or we never know whether the client is ok to redirect.
+    protocol->set_recv_timeout(SRS_RTMP_REDIRECT_TMMS);
+    if (true) {
+        SrsCommonMessage* msg = NULL;
+        SrsCallPacket* pkt = NULL;
+        if ((err = expect_message<SrsCallPacket>(&msg, &pkt)) != srs_success) {
+            srs_freep(err);
+            // ignore any error of redirect response.
+            return srs_success;
+        }
+        SrsAutoFree(SrsCommonMessage, msg);
+        SrsAutoFree(SrsCallPacket, pkt);
+        
+        string message;
+        if (pkt->arguments && pkt->arguments->is_string()) {
+            message = pkt->arguments->to_str();
+            accepted = true;
+        }
+    }
+    
+    return err;
 }
 
 void SrsRtmpServer::response_connect_reject(SrsRequest* /*req*/, const char* desc)
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
     SrsOnStatusCallPacket* pkt = new SrsOnStatusCallPacket();
     pkt->data->set(StatusLevel, SrsAmf0Any::str(StatusLevelError));
     pkt->data->set(StatusCode, SrsAmf0Any::str(StatusCodeConnectRejected));
     pkt->data->set(StatusDescription, SrsAmf0Any::str(desc));
     
-    if ((ret = protocol->send_and_free_packet(pkt, 0)) != ERROR_SUCCESS) {
-        srs_error("send connect app response rejected message failed. ret=%d", ret);
-        return;
+    if ((err = protocol->send_and_free_packet(pkt, 0)) != srs_success) {
+        srs_warn("send reject response err %s", srs_error_desc(err).c_str());
+        srs_freep(err);
     }
-    srs_info("send connect app response rejected message success.");
-
+    
     return;
 }
 
-int SrsRtmpServer::on_bw_done()
+srs_error_t SrsRtmpServer::on_bw_done()
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
     SrsOnBWDonePacket* pkt = new SrsOnBWDonePacket();
-    if ((ret = protocol->send_and_free_packet(pkt, 0)) != ERROR_SUCCESS) {
-        srs_error("send onBWDone message failed. ret=%d", ret);
-        return ret;
+    if ((err = protocol->send_and_free_packet(pkt, 0)) != srs_success) {
+        return srs_error_wrap(err, "send onBWDone");
     }
-    srs_info("send onBWDone message success.");
     
-    return ret;
+    return err;
 }
 
-int SrsRtmpServer::identify_client(int stream_id, SrsRtmpConnType& type, string& stream_name, double& duration)
+srs_error_t SrsRtmpServer::identify_client(int stream_id, SrsRtmpConnType& type, string& stream_name, double& duration)
 {
     type = SrsRtmpConnUnknown;
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
     while (true) {
         SrsCommonMessage* msg = NULL;
-        if ((ret = protocol->recv_message(&msg)) != ERROR_SUCCESS) {
-            if (!srs_is_client_gracefully_close(ret)) {
-                srs_error("recv identify client message failed. ret=%d", ret);
-            }
-            return ret;
+        if ((err = protocol->recv_message(&msg)) != srs_success) {
+            return srs_error_wrap(err, "recv identify message");
         }
-
+        
         SrsAutoFree(SrsCommonMessage, msg);
         SrsMessageHeader& h = msg->header;
         
@@ -2654,29 +2504,24 @@ int SrsRtmpServer::identify_client(int stream_id, SrsRtmpConnType& type, string&
         }
         
         if (!h.is_amf0_command() && !h.is_amf3_command()) {
-            srs_trace("identify ignore messages except "
-                "AMF0/AMF3 command message. type=%#x", h.message_type);
+            srs_trace("ignore message type=%#x", h.message_type);
             continue;
         }
         
         SrsPacket* pkt = NULL;
-        if ((ret = protocol->decode_message(msg, &pkt)) != ERROR_SUCCESS) {
-            srs_error("identify decode message failed. ret=%d", ret);
-            return ret;
+        if ((err = protocol->decode_message(msg, &pkt)) != srs_success) {
+            return srs_error_wrap(err, "decode identify");
         }
         
         SrsAutoFree(SrsPacket, pkt);
         
         if (dynamic_cast<SrsCreateStreamPacket*>(pkt)) {
-            srs_info("identify client by create stream, play or flash publish.");
             return identify_create_stream_client(dynamic_cast<SrsCreateStreamPacket*>(pkt), stream_id, type, stream_name, duration);
         }
         if (dynamic_cast<SrsFMLEStartPacket*>(pkt)) {
-            srs_info("identify client by releaseStream, fmle publish.");
             return identify_fmle_publish_client(dynamic_cast<SrsFMLEStartPacket*>(pkt), type, stream_name);
         }
         if (dynamic_cast<SrsPlayPacket*>(pkt)) {
-            srs_info("level0 identify client by play.");
             return identify_play_client(dynamic_cast<SrsPlayPacket*>(pkt), type, stream_name, duration);
         }
         // call msg,
@@ -2688,18 +2533,14 @@ int SrsRtmpServer::identify_client(int stream_id, SrsRtmpConnType& type, string&
             SrsCallResPacket* res = new SrsCallResPacket(call->transaction_id);
             res->command_object = SrsAmf0Any::null();
             res->response = SrsAmf0Any::null();
-            if ((ret = protocol->send_and_free_packet(res, 0)) != ERROR_SUCCESS) {
-                if (!srs_is_system_control_error(ret) && !srs_is_client_gracefully_close(ret)) {
-                    srs_warn("response call failed. ret=%d", ret);
-                }
-                return ret;
+            if ((err = protocol->send_and_free_packet(res, 0)) != srs_success) {
+                return srs_error_wrap(err, "response call");
             }
             
             // For encoder of Haivision, it always send a _checkbw call message.
-            // @Remark the next message is createStream, so we continue to identify it.
+            // @remark the next message is createStream, so we continue to identify it.
             // @see https://github.com/ossrs/srs/issues/844
             if (call->command_name == "_checkbw") {
-                srs_info("Haivision encoder identified.");
                 continue;
             }
             continue;
@@ -2708,38 +2549,34 @@ int SrsRtmpServer::identify_client(int stream_id, SrsRtmpConnType& type, string&
         srs_trace("ignore AMF0/AMF3 command message.");
     }
     
-    return ret;
+    return err;
 }
 
-int SrsRtmpServer::set_chunk_size(int chunk_size)
+srs_error_t SrsRtmpServer::set_chunk_size(int chunk_size)
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
     SrsSetChunkSizePacket* pkt = new SrsSetChunkSizePacket();
     pkt->chunk_size = chunk_size;
-    if ((ret = protocol->send_and_free_packet(pkt, 0)) != ERROR_SUCCESS) {
-        srs_error("send set chunk size message failed. ret=%d", ret);
-        return ret;
+    if ((err = protocol->send_and_free_packet(pkt, 0)) != srs_success) {
+        return srs_error_wrap(err, "send set chunk size");
     }
-    srs_info("send set chunk size message success. chunk_size=%d", chunk_size);
     
-    return ret;
+    return err;
 }
 
-int SrsRtmpServer::start_play(int stream_id)
+srs_error_t SrsRtmpServer::start_play(int stream_id)
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
     // StreamBegin
     if (true) {
         SrsUserControlPacket* pkt = new SrsUserControlPacket();
         pkt->event_type = SrcPCUCStreamBegin;
         pkt->event_data = stream_id;
-        if ((ret = protocol->send_and_free_packet(pkt, 0)) != ERROR_SUCCESS) {
-            srs_error("send PCUC(StreamBegin) message failed. ret=%d", ret);
-            return ret;
+        if ((err = protocol->send_and_free_packet(pkt, 0)) != srs_success) {
+            return srs_error_wrap(err, "send StreamBegin");
         }
-        srs_info("send PCUC(StreamBegin) message success.");
     }
     
     // onStatus(NetStream.Play.Reset)
@@ -2752,11 +2589,9 @@ int SrsRtmpServer::start_play(int stream_id)
         pkt->data->set(StatusDetails, SrsAmf0Any::str("stream"));
         pkt->data->set(StatusClientId, SrsAmf0Any::str(RTMP_SIG_CLIENT_ID));
         
-        if ((ret = protocol->send_and_free_packet(pkt, stream_id)) != ERROR_SUCCESS) {
-            srs_error("send onStatus(NetStream.Play.Reset) message failed. ret=%d", ret);
-            return ret;
+        if ((err = protocol->send_and_free_packet(pkt, stream_id)) != srs_success) {
+            return srs_error_wrap(err, "send NetStream.Play.Reset");
         }
-        srs_info("send onStatus(NetStream.Play.Reset) message success.");
     }
     
     // onStatus(NetStream.Play.Start)
@@ -2769,48 +2604,40 @@ int SrsRtmpServer::start_play(int stream_id)
         pkt->data->set(StatusDetails, SrsAmf0Any::str("stream"));
         pkt->data->set(StatusClientId, SrsAmf0Any::str(RTMP_SIG_CLIENT_ID));
         
-        if ((ret = protocol->send_and_free_packet(pkt, stream_id)) != ERROR_SUCCESS) {
-            srs_error("send onStatus(NetStream.Play.Start) message failed. ret=%d", ret);
-            return ret;
+        if ((err = protocol->send_and_free_packet(pkt, stream_id)) != srs_success) {
+            return srs_error_wrap(err, "send NetStream.Play.Start");
         }
-        srs_info("send onStatus(NetStream.Play.Start) message success.");
     }
     
     // |RtmpSampleAccess(false, false)
     if (true) {
         SrsSampleAccessPacket* pkt = new SrsSampleAccessPacket();
-
+        
         // allow audio/video sample.
         // @see: https://github.com/ossrs/srs/issues/49
         pkt->audio_sample_access = true;
         pkt->video_sample_access = true;
         
-        if ((ret = protocol->send_and_free_packet(pkt, stream_id)) != ERROR_SUCCESS) {
-            srs_error("send |RtmpSampleAccess(false, false) message failed. ret=%d", ret);
-            return ret;
+        if ((err = protocol->send_and_free_packet(pkt, stream_id)) != srs_success) {
+            return srs_error_wrap(err, "send |RtmpSampleAccess true");
         }
-        srs_info("send |RtmpSampleAccess(false, false) message success.");
     }
     
     // onStatus(NetStream.Data.Start)
     if (true) {
         SrsOnStatusDataPacket* pkt = new SrsOnStatusDataPacket();
         pkt->data->set(StatusCode, SrsAmf0Any::str(StatusCodeDataStart));
-        if ((ret = protocol->send_and_free_packet(pkt, stream_id)) != ERROR_SUCCESS) {
-            srs_error("send onStatus(NetStream.Data.Start) message failed. ret=%d", ret);
-            return ret;
+        if ((err = protocol->send_and_free_packet(pkt, stream_id)) != srs_success) {
+            return srs_error_wrap(err, "send NetStream.Data.Start");
         }
-        srs_info("send onStatus(NetStream.Data.Start) message success.");
     }
     
-    srs_info("start play success.");
-    
-    return ret;
+    return err;
 }
 
-int SrsRtmpServer::on_play_client_pause(int stream_id, bool is_pause)
+srs_error_t SrsRtmpServer::on_play_client_pause(int stream_id, bool is_pause)
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
     if (is_pause) {
         // onStatus(NetStream.Pause.Notify)
@@ -2821,11 +2648,9 @@ int SrsRtmpServer::on_play_client_pause(int stream_id, bool is_pause)
             pkt->data->set(StatusCode, SrsAmf0Any::str(StatusCodeStreamPause));
             pkt->data->set(StatusDescription, SrsAmf0Any::str("Paused stream."));
             
-            if ((ret = protocol->send_and_free_packet(pkt, stream_id)) != ERROR_SUCCESS) {
-                srs_error("send onStatus(NetStream.Pause.Notify) message failed. ret=%d", ret);
-                return ret;
+            if ((err = protocol->send_and_free_packet(pkt, stream_id)) != srs_success) {
+                return srs_error_wrap(err, "send NetStream.Pause.Notify");
             }
-            srs_info("send onStatus(NetStream.Pause.Notify) message success.");
         }
         // StreamEOF
         if (true) {
@@ -2834,11 +2659,9 @@ int SrsRtmpServer::on_play_client_pause(int stream_id, bool is_pause)
             pkt->event_type = SrcPCUCStreamEOF;
             pkt->event_data = stream_id;
             
-            if ((ret = protocol->send_and_free_packet(pkt, 0)) != ERROR_SUCCESS) {
-                srs_error("send PCUC(StreamEOF) message failed. ret=%d", ret);
-                return ret;
+            if ((err = protocol->send_and_free_packet(pkt, 0)) != srs_success) {
+                return srs_error_wrap(err, "send StreamEOF");
             }
-            srs_info("send PCUC(StreamEOF) message success.");
         }
     } else {
         // onStatus(NetStream.Unpause.Notify)
@@ -2849,11 +2672,9 @@ int SrsRtmpServer::on_play_client_pause(int stream_id, bool is_pause)
             pkt->data->set(StatusCode, SrsAmf0Any::str(StatusCodeStreamUnpause));
             pkt->data->set(StatusDescription, SrsAmf0Any::str("Unpaused stream."));
             
-            if ((ret = protocol->send_and_free_packet(pkt, stream_id)) != ERROR_SUCCESS) {
-                srs_error("send onStatus(NetStream.Unpause.Notify) message failed. ret=%d", ret);
-                return ret;
+            if ((err = protocol->send_and_free_packet(pkt, stream_id)) != srs_success) {
+                return srs_error_wrap(err, "send NetStream.Unpause.Notify");
             }
-            srs_info("send onStatus(NetStream.Unpause.Notify) message success.");
         }
         // StreanBegin
         if (true) {
@@ -2862,45 +2683,39 @@ int SrsRtmpServer::on_play_client_pause(int stream_id, bool is_pause)
             pkt->event_type = SrcPCUCStreamBegin;
             pkt->event_data = stream_id;
             
-            if ((ret = protocol->send_and_free_packet(pkt, 0)) != ERROR_SUCCESS) {
-                srs_error("send PCUC(StreanBegin) message failed. ret=%d", ret);
-                return ret;
+            if ((err = protocol->send_and_free_packet(pkt, 0)) != srs_success) {
+                return srs_error_wrap(err, "send StreamBegin");
             }
-            srs_info("send PCUC(StreanBegin) message success.");
         }
     }
     
-    return ret;
+    return err;
 }
 
-int SrsRtmpServer::start_fmle_publish(int stream_id)
+srs_error_t SrsRtmpServer::start_fmle_publish(int stream_id)
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
     // FCPublish
     double fc_publish_tid = 0;
     if (true) {
         SrsCommonMessage* msg = NULL;
         SrsFMLEStartPacket* pkt = NULL;
-        if ((ret = expect_message<SrsFMLEStartPacket>(&msg, &pkt)) != ERROR_SUCCESS) {
-            srs_error("recv FCPublish message failed. ret=%d", ret);
-            return ret;
+        if ((err = expect_message<SrsFMLEStartPacket>(&msg, &pkt)) != srs_success) {
+            return srs_error_wrap(err, "recv FCPublish");
         }
-        srs_info("recv FCPublish request message success.");
         
         SrsAutoFree(SrsCommonMessage, msg);
         SrsAutoFree(SrsFMLEStartPacket, pkt);
-    
+        
         fc_publish_tid = pkt->transaction_id;
     }
     // FCPublish response
     if (true) {
         SrsFMLEStartResPacket* pkt = new SrsFMLEStartResPacket(fc_publish_tid);
-        if ((ret = protocol->send_and_free_packet(pkt, 0)) != ERROR_SUCCESS) {
-            srs_error("send FCPublish response message failed. ret=%d", ret);
-            return ret;
+        if ((err = protocol->send_and_free_packet(pkt, 0)) != srs_success) {
+            return srs_error_wrap(err, "send FCPublish response");
         }
-        srs_info("send FCPublish response message success.");
     }
     
     // createStream
@@ -2908,11 +2723,9 @@ int SrsRtmpServer::start_fmle_publish(int stream_id)
     if (true) {
         SrsCommonMessage* msg = NULL;
         SrsCreateStreamPacket* pkt = NULL;
-        if ((ret = expect_message<SrsCreateStreamPacket>(&msg, &pkt)) != ERROR_SUCCESS) {
-            srs_error("recv createStream message failed. ret=%d", ret);
-            return ret;
+        if ((err = expect_message<SrsCreateStreamPacket>(&msg, &pkt)) != srs_success) {
+            return srs_error_wrap(err, "recv createStream");
         }
-        srs_info("recv createStream request message success.");
         
         SrsAutoFree(SrsCommonMessage, msg);
         SrsAutoFree(SrsCreateStreamPacket, pkt);
@@ -2922,22 +2735,18 @@ int SrsRtmpServer::start_fmle_publish(int stream_id)
     // createStream response
     if (true) {
         SrsCreateStreamResPacket* pkt = new SrsCreateStreamResPacket(create_stream_tid, stream_id);
-        if ((ret = protocol->send_and_free_packet(pkt, 0)) != ERROR_SUCCESS) {
-            srs_error("send createStream response message failed. ret=%d", ret);
-            return ret;
+        if ((err = protocol->send_and_free_packet(pkt, 0)) != srs_success) {
+            return srs_error_wrap(err, "send createStream response");
         }
-        srs_info("send createStream response message success.");
     }
     
     // publish
     if (true) {
         SrsCommonMessage* msg = NULL;
         SrsPublishPacket* pkt = NULL;
-        if ((ret = expect_message<SrsPublishPacket>(&msg, &pkt)) != ERROR_SUCCESS) {
-            srs_error("recv publish message failed. ret=%d", ret);
-            return ret;
+        if ((err = expect_message<SrsPublishPacket>(&msg, &pkt)) != srs_success) {
+            return srs_error_wrap(err, "recv publish");
         }
-        srs_info("recv publish request message success.");
         
         SrsAutoFree(SrsCommonMessage, msg);
         SrsAutoFree(SrsPublishPacket, pkt);
@@ -2950,11 +2759,9 @@ int SrsRtmpServer::start_fmle_publish(int stream_id)
         pkt->data->set(StatusCode, SrsAmf0Any::str(StatusCodePublishStart));
         pkt->data->set(StatusDescription, SrsAmf0Any::str("Started publishing stream."));
         
-        if ((ret = protocol->send_and_free_packet(pkt, stream_id)) != ERROR_SUCCESS) {
-            srs_error("send onFCPublish(NetStream.Publish.Start) message failed. ret=%d", ret);
-            return ret;
+        if ((err = protocol->send_and_free_packet(pkt, stream_id)) != srs_success) {
+            return srs_error_wrap(err, "send NetStream.Publish.Start");
         }
-        srs_info("send onFCPublish(NetStream.Publish.Start) message success.");
     }
     // publish response onStatus(NetStream.Publish.Start)
     if (true) {
@@ -2965,31 +2772,25 @@ int SrsRtmpServer::start_fmle_publish(int stream_id)
         pkt->data->set(StatusDescription, SrsAmf0Any::str("Started publishing stream."));
         pkt->data->set(StatusClientId, SrsAmf0Any::str(RTMP_SIG_CLIENT_ID));
         
-        if ((ret = protocol->send_and_free_packet(pkt, stream_id)) != ERROR_SUCCESS) {
-            srs_error("send onStatus(NetStream.Publish.Start) message failed. ret=%d", ret);
-            return ret;
+        if ((err = protocol->send_and_free_packet(pkt, stream_id)) != srs_success) {
+            return srs_error_wrap(err, "send NetStream.Publish.Start");
         }
-        srs_info("send onStatus(NetStream.Publish.Start) message success.");
     }
     
-    srs_info("FMLE publish success.");
-    
-    return ret;
+    return err;
 }
 
-int SrsRtmpServer::start_haivision_publish(int stream_id)
+srs_error_t SrsRtmpServer::start_haivision_publish(int stream_id)
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
     // publish
     if (true) {
         SrsCommonMessage* msg = NULL;
         SrsPublishPacket* pkt = NULL;
-        if ((ret = expect_message<SrsPublishPacket>(&msg, &pkt)) != ERROR_SUCCESS) {
-            srs_error("recv publish message failed. ret=%d", ret);
-            return ret;
+        if ((err = expect_message<SrsPublishPacket>(&msg, &pkt)) != srs_success) {
+            return srs_error_wrap(err, "recv publish");
         }
-        srs_info("recv publish request message success.");
         
         SrsAutoFree(SrsCommonMessage, msg);
         SrsAutoFree(SrsPublishPacket, pkt);
@@ -3003,11 +2804,9 @@ int SrsRtmpServer::start_haivision_publish(int stream_id)
         pkt->data->set(StatusCode, SrsAmf0Any::str(StatusCodePublishStart));
         pkt->data->set(StatusDescription, SrsAmf0Any::str("Started publishing stream."));
         
-        if ((ret = protocol->send_and_free_packet(pkt, stream_id)) != ERROR_SUCCESS) {
-            srs_error("send onFCPublish(NetStream.Publish.Start) message failed. ret=%d", ret);
-            return ret;
+        if ((err = protocol->send_and_free_packet(pkt, stream_id)) != srs_success) {
+            return srs_error_wrap(err, "send NetStream.Publish.Start");
         }
-        srs_info("send onFCPublish(NetStream.Publish.Start) message success.");
     }
     
     // publish response onStatus(NetStream.Publish.Start)
@@ -3019,21 +2818,17 @@ int SrsRtmpServer::start_haivision_publish(int stream_id)
         pkt->data->set(StatusDescription, SrsAmf0Any::str("Started publishing stream."));
         pkt->data->set(StatusClientId, SrsAmf0Any::str(RTMP_SIG_CLIENT_ID));
         
-        if ((ret = protocol->send_and_free_packet(pkt, stream_id)) != ERROR_SUCCESS) {
-            srs_error("send onStatus(NetStream.Publish.Start) message failed. ret=%d", ret);
-            return ret;
+        if ((err = protocol->send_and_free_packet(pkt, stream_id)) != srs_success) {
+            return srs_error_wrap(err, "send NetStream.Publish.Start");
         }
-        srs_info("send onStatus(NetStream.Publish.Start) message success.");
     }
     
-    srs_info("Haivision publish success.");
-    
-    return ret;
+    return err;
 }
 
-int SrsRtmpServer::fmle_unpublish(int stream_id, double unpublish_tid)
+srs_error_t SrsRtmpServer::fmle_unpublish(int stream_id, double unpublish_tid)
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err =srs_success;
     
     // publish response onFCUnpublish(NetStream.unpublish.Success)
     if (true) {
@@ -3043,24 +2838,16 @@ int SrsRtmpServer::fmle_unpublish(int stream_id, double unpublish_tid)
         pkt->data->set(StatusCode, SrsAmf0Any::str(StatusCodeUnpublishSuccess));
         pkt->data->set(StatusDescription, SrsAmf0Any::str("Stop publishing stream."));
         
-        if ((ret = protocol->send_and_free_packet(pkt, stream_id)) != ERROR_SUCCESS) {
-            if (!srs_is_system_control_error(ret) && !srs_is_client_gracefully_close(ret)) {
-                srs_error("send onFCUnpublish(NetStream.unpublish.Success) message failed. ret=%d", ret);
-            }
-            return ret;
+        if ((err = protocol->send_and_free_packet(pkt, stream_id)) != srs_success) {
+            return srs_error_wrap(err, "send NetStream.unpublish.Success");
         }
-        srs_info("send onFCUnpublish(NetStream.unpublish.Success) message success.");
     }
     // FCUnpublish response
     if (true) {
         SrsFMLEStartResPacket* pkt = new SrsFMLEStartResPacket(unpublish_tid);
-        if ((ret = protocol->send_and_free_packet(pkt, stream_id)) != ERROR_SUCCESS) {
-            if (!srs_is_system_control_error(ret) && !srs_is_client_gracefully_close(ret)) {
-                srs_error("send FCUnpublish response message failed. ret=%d", ret);
-            }
-            return ret;
+        if ((err = protocol->send_and_free_packet(pkt, stream_id)) != srs_success) {
+            return srs_error_wrap(err, "send FCUnpublish response");
         }
-        srs_info("send FCUnpublish response message success.");
     }
     // publish response onStatus(NetStream.Unpublish.Success)
     if (true) {
@@ -3071,23 +2858,17 @@ int SrsRtmpServer::fmle_unpublish(int stream_id, double unpublish_tid)
         pkt->data->set(StatusDescription, SrsAmf0Any::str("Stream is now unpublished"));
         pkt->data->set(StatusClientId, SrsAmf0Any::str(RTMP_SIG_CLIENT_ID));
         
-        if ((ret = protocol->send_and_free_packet(pkt, stream_id)) != ERROR_SUCCESS) {
-            if (!srs_is_system_control_error(ret) && !srs_is_client_gracefully_close(ret)) {
-                srs_error("send onStatus(NetStream.Unpublish.Success) message failed. ret=%d", ret);
-            }
-            return ret;
+        if ((err = protocol->send_and_free_packet(pkt, stream_id)) != srs_success) {
+            return srs_error_wrap(err, "send NetStream.Unpublish.Success");
         }
-        srs_info("send onStatus(NetStream.Unpublish.Success) message success.");
     }
     
-    srs_info("FMLE unpublish success.");
-    
-    return ret;
+    return err;
 }
 
-int SrsRtmpServer::start_flash_publish(int stream_id)
+srs_error_t SrsRtmpServer::start_flash_publish(int stream_id)
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
     // publish response onStatus(NetStream.Publish.Start)
     if (true) {
@@ -3098,87 +2879,72 @@ int SrsRtmpServer::start_flash_publish(int stream_id)
         pkt->data->set(StatusDescription, SrsAmf0Any::str("Started publishing stream."));
         pkt->data->set(StatusClientId, SrsAmf0Any::str(RTMP_SIG_CLIENT_ID));
         
-        if ((ret = protocol->send_and_free_packet(pkt, stream_id)) != ERROR_SUCCESS) {
-            srs_error("send onStatus(NetStream.Publish.Start) message failed. ret=%d", ret);
-            return ret;
+        if ((err = protocol->send_and_free_packet(pkt, stream_id)) != srs_success) {
+            return srs_error_wrap(err, "send NetStream.Publish.Start");
         }
-        srs_info("send onStatus(NetStream.Publish.Start) message success.");
     }
     
-    srs_info("flash publish success.");
-    
-    return ret;
+    return err;
 }
 
-int SrsRtmpServer::identify_create_stream_client(SrsCreateStreamPacket* req, int stream_id, SrsRtmpConnType& type, string& stream_name, double& duration)
+srs_error_t SrsRtmpServer::identify_create_stream_client(SrsCreateStreamPacket* req, int stream_id, SrsRtmpConnType& type, string& stream_name, double& duration)
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
     if (true) {
         SrsCreateStreamResPacket* pkt = new SrsCreateStreamResPacket(req->transaction_id, stream_id);
-        if ((ret = protocol->send_and_free_packet(pkt, 0)) != ERROR_SUCCESS) {
-            srs_error("send createStream response message failed. ret=%d", ret);
-            return ret;
+        if ((err = protocol->send_and_free_packet(pkt, 0)) != srs_success) {
+            return srs_error_wrap(err, "send createStream response");
         }
-        srs_info("send createStream response message success.");
     }
     
     while (true) {
         SrsCommonMessage* msg = NULL;
-        if ((ret = protocol->recv_message(&msg)) != ERROR_SUCCESS) {
-            if (!srs_is_client_gracefully_close(ret)) {
-                srs_error("recv identify client message failed. ret=%d", ret);
-            }
-            return ret;
+        if ((err = protocol->recv_message(&msg)) != srs_success) {
+            return srs_error_wrap(err, "recv identify");
         }
-
+        
         SrsAutoFree(SrsCommonMessage, msg);
         SrsMessageHeader& h = msg->header;
         
         if (h.is_ackledgement() || h.is_set_chunk_size() || h.is_window_ackledgement_size() || h.is_user_control_message()) {
             continue;
         }
-    
+        
         if (!h.is_amf0_command() && !h.is_amf3_command()) {
-            srs_trace("identify ignore messages except "
-                "AMF0/AMF3 command message. type=%#x", h.message_type);
+            srs_trace("ignore message type=%#x", h.message_type);
             continue;
         }
         
         SrsPacket* pkt = NULL;
-        if ((ret = protocol->decode_message(msg, &pkt)) != ERROR_SUCCESS) {
-            srs_error("identify decode message failed. ret=%d", ret);
-            return ret;
+        if ((err = protocol->decode_message(msg, &pkt)) != srs_success) {
+            return srs_error_wrap(err, "decode identify");
         }
-
+        
         SrsAutoFree(SrsPacket, pkt);
         
         if (dynamic_cast<SrsPlayPacket*>(pkt)) {
-            srs_info("level1 identify client by play.");
             return identify_play_client(dynamic_cast<SrsPlayPacket*>(pkt), type, stream_name, duration);
         }
         if (dynamic_cast<SrsPublishPacket*>(pkt)) {
-            srs_info("identify client by publish, falsh publish.");
             return identify_flash_publish_client(dynamic_cast<SrsPublishPacket*>(pkt), type, stream_name);
         }
         if (dynamic_cast<SrsCreateStreamPacket*>(pkt)) {
-            srs_info("identify client by create stream, play or flash publish.");
             return identify_create_stream_client(dynamic_cast<SrsCreateStreamPacket*>(pkt), stream_id, type, stream_name, duration);
         }
         if (dynamic_cast<SrsFMLEStartPacket*>(pkt)) {
-            srs_info("identify client by FCPublish, haivision publish.");
             return identify_haivision_publish_client(dynamic_cast<SrsFMLEStartPacket*>(pkt), type, stream_name);
         }
         
         srs_trace("ignore AMF0/AMF3 command message.");
     }
     
-    return ret;
+    return err;
 }
 
-int SrsRtmpServer::identify_fmle_publish_client(SrsFMLEStartPacket* req, SrsRtmpConnType& type, string& stream_name)
+srs_error_t SrsRtmpServer::identify_fmle_publish_client(SrsFMLEStartPacket* req, SrsRtmpConnType& type, string& stream_name)
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
     type = SrsRtmpConnFMLEPublish;
     stream_name = req->stream_name;
@@ -3186,19 +2952,17 @@ int SrsRtmpServer::identify_fmle_publish_client(SrsFMLEStartPacket* req, SrsRtmp
     // releaseStream response
     if (true) {
         SrsFMLEStartResPacket* pkt = new SrsFMLEStartResPacket(req->transaction_id);
-        if ((ret = protocol->send_and_free_packet(pkt, 0)) != ERROR_SUCCESS) {
-            srs_error("send releaseStream response message failed. ret=%d", ret);
-            return ret;
+        if ((err = protocol->send_and_free_packet(pkt, 0)) != srs_success) {
+            return srs_error_wrap(err, "send releaseStream response");
         }
-        srs_info("send releaseStream response message success.");
     }
     
-    return ret;
+    return err;
 }
 
-int SrsRtmpServer::identify_haivision_publish_client(SrsFMLEStartPacket* req, SrsRtmpConnType& type, string& stream_name)
+srs_error_t SrsRtmpServer::identify_haivision_publish_client(SrsFMLEStartPacket* req, SrsRtmpConnType& type, string& stream_name)
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
     type = SrsRtmpConnHaivisionPublish;
     stream_name = req->stream_name;
@@ -3206,37 +2970,29 @@ int SrsRtmpServer::identify_haivision_publish_client(SrsFMLEStartPacket* req, Sr
     // FCPublish response
     if (true) {
         SrsFMLEStartResPacket* pkt = new SrsFMLEStartResPacket(req->transaction_id);
-        if ((ret = protocol->send_and_free_packet(pkt, 0)) != ERROR_SUCCESS) {
-            srs_error("send FCPublish response message failed. ret=%d", ret);
-            return ret;
+        if ((err = protocol->send_and_free_packet(pkt, 0)) != srs_success) {
+            return srs_error_wrap(err, "send FCPublish");
         }
-        srs_info("send FCPublish response message success.");
     }
     
-    return ret;
+    return err;
 }
 
-int SrsRtmpServer::identify_flash_publish_client(SrsPublishPacket* req, SrsRtmpConnType& type, string& stream_name)
+srs_error_t SrsRtmpServer::identify_flash_publish_client(SrsPublishPacket* req, SrsRtmpConnType& type, string& stream_name)
 {
-    int ret = ERROR_SUCCESS;
-    
     type = SrsRtmpConnFlashPublish;
     stream_name = req->stream_name;
     
-    return ret;
+    return srs_success;
 }
 
-int SrsRtmpServer::identify_play_client(SrsPlayPacket* req, SrsRtmpConnType& type, string& stream_name, double& duration)
+srs_error_t SrsRtmpServer::identify_play_client(SrsPlayPacket* req, SrsRtmpConnType& type, string& stream_name, double& duration)
 {
-    int ret = ERROR_SUCCESS;
-    
     type = SrsRtmpConnPlay;
     stream_name = req->stream_name;
     duration = req->duration;
     
-    srs_info("identity client type=play, stream_name=%s, duration=%.2f", stream_name.c_str(), duration);
-
-    return ret;
+    return srs_success;
 }
 
 SrsConnectAppPacket::SrsConnectAppPacket()
@@ -3254,37 +3010,28 @@ SrsConnectAppPacket::~SrsConnectAppPacket()
     srs_freep(args);
 }
 
-int SrsConnectAppPacket::decode(SrsStream* stream)
+srs_error_t SrsConnectAppPacket::decode(SrsBuffer* stream)
 {
-    int ret = ERROR_SUCCESS;
-
-    if ((ret = srs_amf0_read_string(stream, command_name)) != ERROR_SUCCESS) {
-        srs_error("amf0 decode connect command_name failed. ret=%d", ret);
-        return ret;
+    srs_error_t err = srs_success;
+    
+    if ((err = srs_amf0_read_string(stream, command_name)) != srs_success) {
+        return srs_error_wrap(err, "command_name");
     }
     if (command_name.empty() || command_name != RTMP_AMF0_COMMAND_CONNECT) {
-        ret = ERROR_RTMP_AMF0_DECODE;
-        srs_error("amf0 decode connect command_name failed. "
-            "command_name=%s, ret=%d", command_name.c_str(), ret);
-        return ret;
+        return srs_error_new(ERROR_RTMP_AMF0_DECODE, "invalid command_name=%s", command_name.c_str());
     }
     
-    if ((ret = srs_amf0_read_number(stream, transaction_id)) != ERROR_SUCCESS) {
-        srs_error("amf0 decode connect transaction_id failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_read_number(stream, transaction_id)) != srs_success) {
+        return srs_error_wrap(err, "transaction_id");
     }
     
     // some client donot send id=1.0, so we only warn user if not match.
     if (transaction_id != 1.0) {
-        ret = ERROR_RTMP_AMF0_DECODE;
-        srs_warn("amf0 decode connect transaction_id failed. "
-            "required=%.1f, actual=%.1f, ret=%d", 1.0, transaction_id, ret);
-        ret = ERROR_SUCCESS;
+        srs_warn("invalid transaction_id=%.2f", transaction_id);
     }
     
-    if ((ret = command_object->read(stream)) != ERROR_SUCCESS) {
-        srs_error("amf0 decode connect command_object failed. ret=%d", ret);
-        return ret;
+    if ((err = command_object->read(stream)) != srs_success) {
+        return srs_error_wrap(err, "command_object");
     }
     
     if (!stream->empty()) {
@@ -3293,31 +3040,27 @@ int SrsConnectAppPacket::decode(SrsStream* stream)
         // see: https://github.com/ossrs/srs/issues/186
         // the args maybe any amf0, for instance, a string. we should drop if not object.
         SrsAmf0Any* any = NULL;
-        if ((ret = SrsAmf0Any::discovery(stream, &any)) != ERROR_SUCCESS) {
-            srs_error("amf0 find connect args failed. ret=%d", ret);
-            return ret;
+        if ((err = SrsAmf0Any::discovery(stream, &any)) != srs_success) {
+            return srs_error_wrap(err, "args");
         }
         srs_assert(any);
         
         // read the instance
-        if ((ret = any->read(stream)) != ERROR_SUCCESS) {
-            srs_error("amf0 decode connect args failed. ret=%d", ret);
+        if ((err = any->read(stream)) != srs_success) {
             srs_freep(any);
-            return ret;
+            return srs_error_wrap(err, "args");
         }
         
         // drop when not an AMF0 object.
         if (!any->is_object()) {
-            srs_warn("drop the args, see: '4.1.1. connect', marker=%#x", any->marker);
+            srs_warn("drop the args, see: '4.1.1. connect', marker=%#x", (uint8_t)any->marker);
             srs_freep(any);
         } else {
             args = any->to_object();
         }
     }
     
-    srs_info("amf0 decode connect packet success");
-    
-    return ret;
+    return err;
 }
 
 int SrsConnectAppPacket::get_prefer_cid()
@@ -3344,37 +3087,27 @@ int SrsConnectAppPacket::get_size()
     return size;
 }
 
-int SrsConnectAppPacket::encode_packet(SrsStream* stream)
+srs_error_t SrsConnectAppPacket::encode_packet(SrsBuffer* stream)
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
-    if ((ret = srs_amf0_write_string(stream, command_name)) != ERROR_SUCCESS) {
-        srs_error("encode command_name failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_write_string(stream, command_name)) != srs_success) {
+        return srs_error_wrap(err, "command_name");
     }
-    srs_verbose("encode command_name success.");
     
-    if ((ret = srs_amf0_write_number(stream, transaction_id)) != ERROR_SUCCESS) {
-        srs_error("encode transaction_id failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_write_number(stream, transaction_id)) != srs_success) {
+        return srs_error_wrap(err, "transaction_id");
     }
-    srs_verbose("encode transaction_id success.");
     
-    if ((ret = command_object->write(stream)) != ERROR_SUCCESS) {
-        srs_error("encode command_object failed. ret=%d", ret);
-        return ret;
+    if ((err = command_object->write(stream)) != srs_success) {
+        return srs_error_wrap(err, "command_object");
     }
-    srs_verbose("encode command_object success.");
     
-    if (args && (ret = args->write(stream)) != ERROR_SUCCESS) {
-        srs_error("encode args failed. ret=%d", ret);
-        return ret;
+    if (args && (err = args->write(stream)) != srs_success) {
+        return srs_error_wrap(err, "args");
     }
-    srs_verbose("encode args success.");
     
-    srs_info("encode connect app request packet success.");
-    
-    return ret;
+    return err;
 }
 
 SrsConnectAppResPacket::SrsConnectAppResPacket()
@@ -3391,62 +3124,49 @@ SrsConnectAppResPacket::~SrsConnectAppResPacket()
     srs_freep(info);
 }
 
-int SrsConnectAppResPacket::decode(SrsStream* stream)
+srs_error_t SrsConnectAppResPacket::decode(SrsBuffer* stream)
 {
-    int ret = ERROR_SUCCESS;
-
-    if ((ret = srs_amf0_read_string(stream, command_name)) != ERROR_SUCCESS) {
-        srs_error("amf0 decode connect command_name failed. ret=%d", ret);
-        return ret;
+    srs_error_t err = srs_success;
+    
+    if ((err = srs_amf0_read_string(stream, command_name)) != srs_success) {
+        return srs_error_wrap(err, "command_name");
     }
     if (command_name.empty() || command_name != RTMP_AMF0_COMMAND_RESULT) {
-        ret = ERROR_RTMP_AMF0_DECODE;
-        srs_error("amf0 decode connect command_name failed. "
-            "command_name=%s, ret=%d", command_name.c_str(), ret);
-        return ret;
+        return srs_error_new(ERROR_RTMP_AMF0_DECODE, "command_name=%s", command_name.c_str());
     }
     
-    if ((ret = srs_amf0_read_number(stream, transaction_id)) != ERROR_SUCCESS) {
-        srs_error("amf0 decode connect transaction_id failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_read_number(stream, transaction_id)) != srs_success) {
+        return srs_error_wrap(err, "transaction_id");
     }
     
     // some client donot send id=1.0, so we only warn user if not match.
     if (transaction_id != 1.0) {
-        ret = ERROR_RTMP_AMF0_DECODE;
-        srs_warn("amf0 decode connect transaction_id failed. "
-            "required=%.1f, actual=%.1f, ret=%d", 1.0, transaction_id, ret);
-        ret = ERROR_SUCCESS;
+        srs_warn("invalid transaction_id=%.2f", transaction_id);
     }
     
     // for RED5(1.0.6), the props is NULL, we must ignore it.
     // @see https://github.com/ossrs/srs/issues/418
     if (!stream->empty()) {
         SrsAmf0Any* p = NULL;
-        if ((ret = srs_amf0_read_any(stream, &p)) != ERROR_SUCCESS) {
-            srs_error("amf0 decode connect props failed. ret=%d", ret);
-            return ret;
+        if ((err = srs_amf0_read_any(stream, &p)) != srs_success) {
+            return srs_error_wrap(err, "args");
         }
         
         // ignore when props is not amf0 object.
         if (!p->is_object()) {
-            srs_warn("ignore connect response props marker=%#x.", (u_int8_t)p->marker);
+            srs_warn("ignore connect response props marker=%#x.", (uint8_t)p->marker);
             srs_freep(p);
         } else {
             srs_freep(props);
             props = p->to_object();
-            srs_info("accept amf0 object connect response props");
         }
     }
     
-    if ((ret = info->read(stream)) != ERROR_SUCCESS) {
-        srs_error("amf0 decode connect info failed. ret=%d", ret);
-        return ret;
+    if ((err = info->read(stream)) != srs_success) {
+        return srs_error_wrap(err, "args");
     }
     
-    srs_info("amf0 decode connect response packet success");
-    
-    return ret;
+    return err;
 }
 
 int SrsConnectAppResPacket::get_prefer_cid()
@@ -3461,43 +3181,31 @@ int SrsConnectAppResPacket::get_message_type()
 
 int SrsConnectAppResPacket::get_size()
 {
-    return SrsAmf0Size::str(command_name) + SrsAmf0Size::number() 
-        + SrsAmf0Size::object(props) + SrsAmf0Size::object(info);
+    return SrsAmf0Size::str(command_name) + SrsAmf0Size::number()
+    + SrsAmf0Size::object(props) + SrsAmf0Size::object(info);
 }
 
-int SrsConnectAppResPacket::encode_packet(SrsStream* stream)
+srs_error_t SrsConnectAppResPacket::encode_packet(SrsBuffer* stream)
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
-    if ((ret = srs_amf0_write_string(stream, command_name)) != ERROR_SUCCESS) {
-        srs_error("encode command_name failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_write_string(stream, command_name)) != srs_success) {
+        return srs_error_wrap(err, "command_name");
     }
-    srs_verbose("encode command_name success.");
     
-    if ((ret = srs_amf0_write_number(stream, transaction_id)) != ERROR_SUCCESS) {
-        srs_error("encode transaction_id failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_write_number(stream, transaction_id)) != srs_success) {
+        return srs_error_wrap(err, "transaction_id");
     }
-    srs_verbose("encode transaction_id success.");
     
-    if ((ret = props->write(stream)) != ERROR_SUCCESS) {
-        srs_error("encode props failed. ret=%d", ret);
-        return ret;
+    if ((err = props->write(stream)) != srs_success) {
+        return srs_error_wrap(err, "props");
     }
-
-    srs_verbose("encode props success.");
     
-    if ((ret = info->write(stream)) != ERROR_SUCCESS) {
-        srs_error("encode info failed. ret=%d", ret);
-        return ret;
+    if ((err = info->write(stream)) != srs_success) {
+        return srs_error_wrap(err, "info");
     }
-
-    srs_verbose("encode info success.");
     
-    srs_info("encode connect app response packet success.");
-    
-    return ret;
+    return err;
 }
 
 SrsCallPacket::SrsCallPacket()
@@ -3514,51 +3222,40 @@ SrsCallPacket::~SrsCallPacket()
     srs_freep(arguments);
 }
 
-int SrsCallPacket::decode(SrsStream* stream)
+srs_error_t SrsCallPacket::decode(SrsBuffer* stream)
 {
-    int ret = ERROR_SUCCESS;
-
-    if ((ret = srs_amf0_read_string(stream, command_name)) != ERROR_SUCCESS) {
-        srs_error("amf0 decode call command_name failed. ret=%d", ret);
-        return ret;
+    srs_error_t err = srs_success;
+    
+    if ((err = srs_amf0_read_string(stream, command_name)) != srs_success) {
+        return srs_error_wrap(err, "command_name");
     }
     if (command_name.empty()) {
-        ret = ERROR_RTMP_AMF0_DECODE;
-        srs_error("amf0 decode call command_name failed. "
-            "command_name=%s, ret=%d", command_name.c_str(), ret);
-        return ret;
+        return srs_error_new(ERROR_RTMP_AMF0_DECODE, "empty command_name");
     }
     
-    if ((ret = srs_amf0_read_number(stream, transaction_id)) != ERROR_SUCCESS) {
-        srs_error("amf0 decode call transaction_id failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_read_number(stream, transaction_id)) != srs_success) {
+        return srs_error_wrap(err, "transaction_id");
     }
     
     srs_freep(command_object);
-    if ((ret = SrsAmf0Any::discovery(stream, &command_object)) != ERROR_SUCCESS) {
-        srs_error("amf0 discovery call command_object failed. ret=%d", ret);
-        return ret;
+    if ((err = SrsAmf0Any::discovery(stream, &command_object)) != srs_success) {
+        return srs_error_wrap(err, "discovery command_object");
     }
-    if ((ret = command_object->read(stream)) != ERROR_SUCCESS) {
-        srs_error("amf0 decode call command_object failed. ret=%d", ret);
-        return ret;
+    if ((err = command_object->read(stream)) != srs_success) {
+        return srs_error_wrap(err, "command_object");
     }
     
     if (!stream->empty()) {
         srs_freep(arguments);
-        if ((ret = SrsAmf0Any::discovery(stream, &arguments)) != ERROR_SUCCESS) {
-            srs_error("amf0 discovery call arguments failed. ret=%d", ret);
-            return ret;
+        if ((err = SrsAmf0Any::discovery(stream, &arguments)) != srs_success) {
+            return srs_error_wrap(err, "discovery args");
         }
-        if ((ret = arguments->read(stream)) != ERROR_SUCCESS) {
-            srs_error("amf0 decode call arguments failed. ret=%d", ret);
-            return ret;
+        if ((err = arguments->read(stream)) != srs_success) {
+            return srs_error_wrap(err, "read args");
         }
     }
     
-    srs_info("amf0 decode call packet success");
-    
-    return ret;
+    return err;
 }
 
 int SrsCallPacket::get_prefer_cid()
@@ -3588,37 +3285,27 @@ int SrsCallPacket::get_size()
     return size;
 }
 
-int SrsCallPacket::encode_packet(SrsStream* stream)
+srs_error_t SrsCallPacket::encode_packet(SrsBuffer* stream)
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
-    if ((ret = srs_amf0_write_string(stream, command_name)) != ERROR_SUCCESS) {
-        srs_error("encode command_name failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_write_string(stream, command_name)) != srs_success) {
+        return srs_error_wrap(err, "command_name");
     }
-    srs_verbose("encode command_name success.");
     
-    if ((ret = srs_amf0_write_number(stream, transaction_id)) != ERROR_SUCCESS) {
-        srs_error("encode transaction_id failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_write_number(stream, transaction_id)) != srs_success) {
+        return srs_error_wrap(err, "transaction_id");
     }
-    srs_verbose("encode transaction_id success.");
     
-    if (command_object && (ret = command_object->write(stream)) != ERROR_SUCCESS) {
-        srs_error("encode command_object failed. ret=%d", ret);
-        return ret;
+    if (command_object && (err = command_object->write(stream)) != srs_success) {
+        return srs_error_wrap(err, "command_object");
     }
-    srs_verbose("encode command_object success.");
     
-    if (arguments && (ret = arguments->write(stream)) != ERROR_SUCCESS) {
-        srs_error("encode arguments failed. ret=%d", ret);
-        return ret;
+    if (arguments && (err = arguments->write(stream)) != srs_success) {
+        return srs_error_wrap(err, "args");
     }
-    srs_verbose("encode arguments success.");
     
-    srs_info("encode create stream request packet success.");
-    
-    return ret;
+    return err;
 }
 
 SrsCallResPacket::SrsCallResPacket(double _transaction_id)
@@ -3662,38 +3349,27 @@ int SrsCallResPacket::get_size()
     return size;
 }
 
-int SrsCallResPacket::encode_packet(SrsStream* stream)
+srs_error_t SrsCallResPacket::encode_packet(SrsBuffer* stream)
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
-    if ((ret = srs_amf0_write_string(stream, command_name)) != ERROR_SUCCESS) {
-        srs_error("encode command_name failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_write_string(stream, command_name)) != srs_success) {
+        return srs_error_wrap(err, "command_name");
     }
-    srs_verbose("encode command_name success.");
     
-    if ((ret = srs_amf0_write_number(stream, transaction_id)) != ERROR_SUCCESS) {
-        srs_error("encode transaction_id failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_write_number(stream, transaction_id)) != srs_success) {
+        return srs_error_wrap(err, "transaction_id");
     }
-    srs_verbose("encode transaction_id success.");
     
-    if (command_object && (ret = command_object->write(stream)) != ERROR_SUCCESS) {
-        srs_error("encode command_object failed. ret=%d", ret);
-        return ret;
+    if (command_object && (err = command_object->write(stream)) != srs_success) {
+        return srs_error_wrap(err, "command_object");
     }
-    srs_verbose("encode command_object success.");
     
-    if (response && (ret = response->write(stream)) != ERROR_SUCCESS) {
-        srs_error("encode response failed. ret=%d", ret);
-        return ret;
+    if (response && (err = response->write(stream)) != srs_success) {
+        return srs_error_wrap(err, "response");
     }
-    srs_verbose("encode response success.");
     
-    
-    srs_info("encode call response packet success.");
-    
-    return ret;
+    return err;
 }
 
 SrsCreateStreamPacket::SrsCreateStreamPacket()
@@ -3708,34 +3384,26 @@ SrsCreateStreamPacket::~SrsCreateStreamPacket()
     srs_freep(command_object);
 }
 
-int SrsCreateStreamPacket::decode(SrsStream* stream)
+srs_error_t SrsCreateStreamPacket::decode(SrsBuffer* stream)
 {
-    int ret = ERROR_SUCCESS;
-
-    if ((ret = srs_amf0_read_string(stream, command_name)) != ERROR_SUCCESS) {
-        srs_error("amf0 decode createStream command_name failed. ret=%d", ret);
-        return ret;
+    srs_error_t err = srs_success;
+    
+    if ((err = srs_amf0_read_string(stream, command_name)) != srs_success) {
+        return srs_error_wrap(err, "command_name");
     }
     if (command_name.empty() || command_name != RTMP_AMF0_COMMAND_CREATE_STREAM) {
-        ret = ERROR_RTMP_AMF0_DECODE;
-        srs_error("amf0 decode createStream command_name failed. "
-            "command_name=%s, ret=%d", command_name.c_str(), ret);
-        return ret;
+        return srs_error_new(ERROR_RTMP_AMF0_DECODE, "invalid command_name=%s", command_name.c_str());
     }
     
-    if ((ret = srs_amf0_read_number(stream, transaction_id)) != ERROR_SUCCESS) {
-        srs_error("amf0 decode createStream transaction_id failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_read_number(stream, transaction_id)) != srs_success) {
+        return srs_error_wrap(err, "transaction_id");
     }
     
-    if ((ret = srs_amf0_read_null(stream)) != ERROR_SUCCESS) {
-        srs_error("amf0 decode createStream command_object failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_read_null(stream)) != srs_success) {
+        return srs_error_wrap(err, "command_object");
     }
     
-    srs_info("amf0 decode createStream packet success");
-    
-    return ret;
+    return err;
 }
 
 int SrsCreateStreamPacket::get_prefer_cid()
@@ -3751,34 +3419,26 @@ int SrsCreateStreamPacket::get_message_type()
 int SrsCreateStreamPacket::get_size()
 {
     return SrsAmf0Size::str(command_name) + SrsAmf0Size::number()
-        + SrsAmf0Size::null();
+    + SrsAmf0Size::null();
 }
 
-int SrsCreateStreamPacket::encode_packet(SrsStream* stream)
+srs_error_t SrsCreateStreamPacket::encode_packet(SrsBuffer* stream)
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
-    if ((ret = srs_amf0_write_string(stream, command_name)) != ERROR_SUCCESS) {
-        srs_error("encode command_name failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_write_string(stream, command_name)) != srs_success) {
+        return srs_error_wrap(err, "command_name");
     }
-    srs_verbose("encode command_name success.");
     
-    if ((ret = srs_amf0_write_number(stream, transaction_id)) != ERROR_SUCCESS) {
-        srs_error("encode transaction_id failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_write_number(stream, transaction_id)) != srs_success) {
+        return srs_error_wrap(err, "transaction_id");
     }
-    srs_verbose("encode transaction_id success.");
     
-    if ((ret = srs_amf0_write_null(stream)) != ERROR_SUCCESS) {
-        srs_error("encode command_object failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_write_null(stream)) != srs_success) {
+        return srs_error_wrap(err, "command_object");
     }
-    srs_verbose("encode command_object success.");
     
-    srs_info("encode create stream request packet success.");
-    
-    return ret;
+    return err;
 }
 
 SrsCreateStreamResPacket::SrsCreateStreamResPacket(double _transaction_id, double _stream_id)
@@ -3794,39 +3454,30 @@ SrsCreateStreamResPacket::~SrsCreateStreamResPacket()
     srs_freep(command_object);
 }
 
-int SrsCreateStreamResPacket::decode(SrsStream* stream)
+srs_error_t SrsCreateStreamResPacket::decode(SrsBuffer* stream)
 {
-    int ret = ERROR_SUCCESS;
-
-    if ((ret = srs_amf0_read_string(stream, command_name)) != ERROR_SUCCESS) {
-        srs_error("amf0 decode createStream command_name failed. ret=%d", ret);
-        return ret;
+    srs_error_t err = srs_success;
+    
+    if ((err = srs_amf0_read_string(stream, command_name)) != srs_success) {
+        return srs_error_wrap(err, "command_name");
     }
     if (command_name.empty() || command_name != RTMP_AMF0_COMMAND_RESULT) {
-        ret = ERROR_RTMP_AMF0_DECODE;
-        srs_error("amf0 decode createStream command_name failed. "
-            "command_name=%s, ret=%d", command_name.c_str(), ret);
-        return ret;
+        return srs_error_new(ERROR_RTMP_AMF0_DECODE, "invalid command_name=%s", command_name.c_str());
     }
     
-    if ((ret = srs_amf0_read_number(stream, transaction_id)) != ERROR_SUCCESS) {
-        srs_error("amf0 decode createStream transaction_id failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_read_number(stream, transaction_id)) != srs_success) {
+        return srs_error_wrap(err, "transaction_id");
     }
     
-    if ((ret = srs_amf0_read_null(stream)) != ERROR_SUCCESS) {
-        srs_error("amf0 decode createStream command_object failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_read_null(stream)) != srs_success) {
+        return srs_error_wrap(err, "command_object");
     }
     
-    if ((ret = srs_amf0_read_number(stream, stream_id)) != ERROR_SUCCESS) {
-        srs_error("amf0 decode createStream stream_id failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_read_number(stream, stream_id)) != srs_success) {
+        return srs_error_wrap(err, "stream_id");
     }
     
-    srs_info("amf0 decode createStream response packet success");
-    
-    return ret;
+    return err;
 }
 
 int SrsCreateStreamResPacket::get_prefer_cid()
@@ -3842,41 +3493,30 @@ int SrsCreateStreamResPacket::get_message_type()
 int SrsCreateStreamResPacket::get_size()
 {
     return SrsAmf0Size::str(command_name) + SrsAmf0Size::number()
-        + SrsAmf0Size::null() + SrsAmf0Size::number();
+    + SrsAmf0Size::null() + SrsAmf0Size::number();
 }
 
-int SrsCreateStreamResPacket::encode_packet(SrsStream* stream)
+srs_error_t SrsCreateStreamResPacket::encode_packet(SrsBuffer* stream)
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
-    if ((ret = srs_amf0_write_string(stream, command_name)) != ERROR_SUCCESS) {
-        srs_error("encode command_name failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_write_string(stream, command_name)) != srs_success) {
+        return srs_error_wrap(err, "command_name");
     }
-    srs_verbose("encode command_name success.");
     
-    if ((ret = srs_amf0_write_number(stream, transaction_id)) != ERROR_SUCCESS) {
-        srs_error("encode transaction_id failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_write_number(stream, transaction_id)) != srs_success) {
+        return srs_error_wrap(err, "transaction_id");
     }
-    srs_verbose("encode transaction_id success.");
     
-    if ((ret = srs_amf0_write_null(stream)) != ERROR_SUCCESS) {
-        srs_error("encode command_object failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_write_null(stream)) != srs_success) {
+        return srs_error_wrap(err, "command_object");
     }
-    srs_verbose("encode command_object success.");
     
-    if ((ret = srs_amf0_write_number(stream, stream_id)) != ERROR_SUCCESS) {
-        srs_error("encode stream_id failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_write_number(stream, stream_id)) != srs_success) {
+        return srs_error_wrap(err, "stream_id");
     }
-    srs_verbose("encode stream_id success.");
     
-    
-    srs_info("encode createStream response packet success.");
-    
-    return ret;
+    return err;
 }
 
 SrsCloseStreamPacket::SrsCloseStreamPacket()
@@ -3891,27 +3531,23 @@ SrsCloseStreamPacket::~SrsCloseStreamPacket()
     srs_freep(command_object);
 }
 
-int SrsCloseStreamPacket::decode(SrsStream* stream)
+srs_error_t SrsCloseStreamPacket::decode(SrsBuffer* stream)
 {
-    int ret = ERROR_SUCCESS;
-
-    if ((ret = srs_amf0_read_string(stream, command_name)) != ERROR_SUCCESS) {
-        srs_error("amf0 decode closeStream command_name failed. ret=%d", ret);
-        return ret;
+    srs_error_t err = srs_success;
+    
+    if ((err = srs_amf0_read_string(stream, command_name)) != srs_success) {
+        return srs_error_wrap(err, "command_name");
     }
-
-    if ((ret = srs_amf0_read_number(stream, transaction_id)) != ERROR_SUCCESS) {
-        srs_error("amf0 decode closeStream transaction_id failed. ret=%d", ret);
-        return ret;
+    
+    if ((err = srs_amf0_read_number(stream, transaction_id)) != srs_success) {
+        return srs_error_wrap(err, "transaction_id");
     }
-
-    if ((ret = srs_amf0_read_null(stream)) != ERROR_SUCCESS) {
-        srs_error("amf0 decode closeStream command_object failed. ret=%d", ret);
-        return ret;
+    
+    if ((err = srs_amf0_read_null(stream)) != srs_success) {
+        return srs_error_wrap(err, "command_object");
     }
-    srs_info("amf0 decode closeStream packet success");
-
-    return ret;
+    
+    return err;
 }
 
 SrsFMLEStartPacket::SrsFMLEStartPacket()
@@ -3926,43 +3562,33 @@ SrsFMLEStartPacket::~SrsFMLEStartPacket()
     srs_freep(command_object);
 }
 
-int SrsFMLEStartPacket::decode(SrsStream* stream)
+srs_error_t SrsFMLEStartPacket::decode(SrsBuffer* stream)
 {
-    int ret = ERROR_SUCCESS;
-
-    if ((ret = srs_amf0_read_string(stream, command_name)) != ERROR_SUCCESS) {
-        srs_error("amf0 decode FMLE start command_name failed. ret=%d", ret);
-        return ret;
-    }
-    if (command_name.empty() 
-        || (command_name != RTMP_AMF0_COMMAND_RELEASE_STREAM 
-        && command_name != RTMP_AMF0_COMMAND_FC_PUBLISH
-        && command_name != RTMP_AMF0_COMMAND_UNPUBLISH)
-    ) {
-        ret = ERROR_RTMP_AMF0_DECODE;
-        srs_error("amf0 decode FMLE start command_name failed. "
-            "command_name=%s, ret=%d", command_name.c_str(), ret);
-        return ret;
+    srs_error_t err = srs_success;
+    
+    if ((err = srs_amf0_read_string(stream, command_name)) != srs_success) {
+        return srs_error_wrap(err, "command_name");
     }
     
-    if ((ret = srs_amf0_read_number(stream, transaction_id)) != ERROR_SUCCESS) {
-        srs_error("amf0 decode FMLE start transaction_id failed. ret=%d", ret);
-        return ret;
+    bool invalid_command_name = (command_name != RTMP_AMF0_COMMAND_RELEASE_STREAM
+        && command_name != RTMP_AMF0_COMMAND_FC_PUBLISH && command_name != RTMP_AMF0_COMMAND_UNPUBLISH);
+    if (command_name.empty() || invalid_command_name) {
+        return srs_error_new(ERROR_RTMP_AMF0_DECODE, "invalid command_name=%s", command_name.c_str());
     }
     
-    if ((ret = srs_amf0_read_null(stream)) != ERROR_SUCCESS) {
-        srs_error("amf0 decode FMLE start command_object failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_read_number(stream, transaction_id)) != srs_success) {
+        return srs_error_wrap(err, "transaction_id");
     }
     
-    if ((ret = srs_amf0_read_string(stream, stream_name)) != ERROR_SUCCESS) {
-        srs_error("amf0 decode FMLE start stream_name failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_read_null(stream)) != srs_success) {
+        return srs_error_wrap(err, "command_object");
     }
     
-    srs_info("amf0 decode FMLE start packet success");
+    if ((err = srs_amf0_read_string(stream, stream_name)) != srs_success) {
+        return srs_error_wrap(err, "stream_name");
+    }
     
-    return ret;
+    return err;
 }
 
 int SrsFMLEStartPacket::get_prefer_cid()
@@ -3978,41 +3604,30 @@ int SrsFMLEStartPacket::get_message_type()
 int SrsFMLEStartPacket::get_size()
 {
     return SrsAmf0Size::str(command_name) + SrsAmf0Size::number()
-        + SrsAmf0Size::null() + SrsAmf0Size::str(stream_name);
+    + SrsAmf0Size::null() + SrsAmf0Size::str(stream_name);
 }
 
-int SrsFMLEStartPacket::encode_packet(SrsStream* stream)
+srs_error_t SrsFMLEStartPacket::encode_packet(SrsBuffer* stream)
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
-    if ((ret = srs_amf0_write_string(stream, command_name)) != ERROR_SUCCESS) {
-        srs_error("encode command_name failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_write_string(stream, command_name)) != srs_success) {
+        return srs_error_wrap(err, "command_name");
     }
-    srs_verbose("encode command_name success.");
     
-    if ((ret = srs_amf0_write_number(stream, transaction_id)) != ERROR_SUCCESS) {
-        srs_error("encode transaction_id failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_write_number(stream, transaction_id)) != srs_success) {
+        return srs_error_wrap(err, "transaction_id");
     }
-    srs_verbose("encode transaction_id success.");
     
-    if ((ret = srs_amf0_write_null(stream)) != ERROR_SUCCESS) {
-        srs_error("encode command_object failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_write_null(stream)) != srs_success) {
+        return srs_error_wrap(err, "command_object");
     }
-    srs_verbose("encode command_object success.");
     
-    if ((ret = srs_amf0_write_string(stream, stream_name)) != ERROR_SUCCESS) {
-        srs_error("encode stream_name failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_write_string(stream, stream_name)) != srs_success) {
+        return srs_error_wrap(err, "stream_name");
     }
-    srs_verbose("encode stream_name success.");
     
-    
-    srs_info("encode FMLE start response packet success.");
-    
-    return ret;
+    return err;
 }
 
 SrsFMLEStartPacket* SrsFMLEStartPacket::create_release_stream(string stream)
@@ -4051,39 +3666,30 @@ SrsFMLEStartResPacket::~SrsFMLEStartResPacket()
     srs_freep(args);
 }
 
-int SrsFMLEStartResPacket::decode(SrsStream* stream)
+srs_error_t SrsFMLEStartResPacket::decode(SrsBuffer* stream)
 {
-    int ret = ERROR_SUCCESS;
-
-    if ((ret = srs_amf0_read_string(stream, command_name)) != ERROR_SUCCESS) {
-        srs_error("amf0 decode FMLE start response command_name failed. ret=%d", ret);
-        return ret;
+    srs_error_t err = srs_success;
+    
+    if ((err = srs_amf0_read_string(stream, command_name)) != srs_success) {
+        return srs_error_wrap(err, "command_name");
     }
     if (command_name.empty() || command_name != RTMP_AMF0_COMMAND_RESULT) {
-        ret = ERROR_RTMP_AMF0_DECODE;
-        srs_error("amf0 decode FMLE start response command_name failed. "
-            "command_name=%s, ret=%d", command_name.c_str(), ret);
-        return ret;
+        return srs_error_new(ERROR_RTMP_AMF0_DECODE, "invalid command_name=%s", command_name.c_str());
     }
     
-    if ((ret = srs_amf0_read_number(stream, transaction_id)) != ERROR_SUCCESS) {
-        srs_error("amf0 decode FMLE start response transaction_id failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_read_number(stream, transaction_id)) != srs_success) {
+        return srs_error_wrap(err, "transaction_id");
     }
     
-    if ((ret = srs_amf0_read_null(stream)) != ERROR_SUCCESS) {
-        srs_error("amf0 decode FMLE start response command_object failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_read_null(stream)) != srs_success) {
+        return srs_error_wrap(err, "command_object");
     }
     
-    if ((ret = srs_amf0_read_undefined(stream)) != ERROR_SUCCESS) {
-        srs_error("amf0 decode FMLE start response stream_id failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_read_undefined(stream)) != srs_success) {
+        return srs_error_wrap(err, "stream_id");
     }
     
-    srs_info("amf0 decode FMLE start packet success");
-    
-    return ret;
+    return err;
 }
 
 int SrsFMLEStartResPacket::get_prefer_cid()
@@ -4099,41 +3705,30 @@ int SrsFMLEStartResPacket::get_message_type()
 int SrsFMLEStartResPacket::get_size()
 {
     return SrsAmf0Size::str(command_name) + SrsAmf0Size::number()
-        + SrsAmf0Size::null() + SrsAmf0Size::undefined();
+    + SrsAmf0Size::null() + SrsAmf0Size::undefined();
 }
 
-int SrsFMLEStartResPacket::encode_packet(SrsStream* stream)
+srs_error_t SrsFMLEStartResPacket::encode_packet(SrsBuffer* stream)
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
-    if ((ret = srs_amf0_write_string(stream, command_name)) != ERROR_SUCCESS) {
-        srs_error("encode command_name failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_write_string(stream, command_name)) != srs_success) {
+        return srs_error_wrap(err, "command_name");
     }
-    srs_verbose("encode command_name success.");
     
-    if ((ret = srs_amf0_write_number(stream, transaction_id)) != ERROR_SUCCESS) {
-        srs_error("encode transaction_id failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_write_number(stream, transaction_id)) != srs_success) {
+        return srs_error_wrap(err, "transaction_id");
     }
-    srs_verbose("encode transaction_id success.");
     
-    if ((ret = srs_amf0_write_null(stream)) != ERROR_SUCCESS) {
-        srs_error("encode command_object failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_write_null(stream)) != srs_success) {
+        return srs_error_wrap(err, "command_object");
     }
-    srs_verbose("encode command_object success.");
     
-    if ((ret = srs_amf0_write_undefined(stream)) != ERROR_SUCCESS) {
-        srs_error("encode args failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_write_undefined(stream)) != srs_success) {
+        return srs_error_wrap(err, "args");
     }
-    srs_verbose("encode args success.");
     
-    
-    srs_info("encode FMLE start response packet success.");
-    
-    return ret;
+    return err;
 }
 
 SrsPublishPacket::SrsPublishPacket()
@@ -4149,44 +3744,34 @@ SrsPublishPacket::~SrsPublishPacket()
     srs_freep(command_object);
 }
 
-int SrsPublishPacket::decode(SrsStream* stream)
+srs_error_t SrsPublishPacket::decode(SrsBuffer* stream)
 {
-    int ret = ERROR_SUCCESS;
-
-    if ((ret = srs_amf0_read_string(stream, command_name)) != ERROR_SUCCESS) {
-        srs_error("amf0 decode publish command_name failed. ret=%d", ret);
-        return ret;
+    srs_error_t err = srs_success;
+    
+    if ((err = srs_amf0_read_string(stream, command_name)) != srs_success) {
+        return srs_error_wrap(err, "command_name");
     }
     if (command_name.empty() || command_name != RTMP_AMF0_COMMAND_PUBLISH) {
-        ret = ERROR_RTMP_AMF0_DECODE;
-        srs_error("amf0 decode publish command_name failed. "
-            "command_name=%s, ret=%d", command_name.c_str(), ret);
-        return ret;
+        return srs_error_new(ERROR_RTMP_AMF0_DECODE, "invalid command_name=%s", command_name.c_str());
     }
     
-    if ((ret = srs_amf0_read_number(stream, transaction_id)) != ERROR_SUCCESS) {
-        srs_error("amf0 decode publish transaction_id failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_read_number(stream, transaction_id)) != srs_success) {
+        return srs_error_wrap(err, "transaction_id");
     }
     
-    if ((ret = srs_amf0_read_null(stream)) != ERROR_SUCCESS) {
-        srs_error("amf0 decode publish command_object failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_read_null(stream)) != srs_success) {
+        return srs_error_wrap(err, "command_object");
     }
     
-    if ((ret = srs_amf0_read_string(stream, stream_name)) != ERROR_SUCCESS) {
-        srs_error("amf0 decode publish stream_name failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_read_string(stream, stream_name)) != srs_success) {
+        return srs_error_wrap(err, "stream_name");
     }
     
-    if (!stream->empty() && (ret = srs_amf0_read_string(stream, type)) != ERROR_SUCCESS) {
-        srs_error("amf0 decode publish type failed. ret=%d", ret);
-        return ret;
+    if (!stream->empty() && (err = srs_amf0_read_string(stream, type)) != srs_success) {
+        return srs_error_wrap(err, "publish type");
     }
     
-    srs_info("amf0 decode publish packet success");
-    
-    return ret;
+    return err;
 }
 
 int SrsPublishPacket::get_prefer_cid()
@@ -4202,47 +3787,35 @@ int SrsPublishPacket::get_message_type()
 int SrsPublishPacket::get_size()
 {
     return SrsAmf0Size::str(command_name) + SrsAmf0Size::number()
-        + SrsAmf0Size::null() + SrsAmf0Size::str(stream_name)
-        + SrsAmf0Size::str(type);
+    + SrsAmf0Size::null() + SrsAmf0Size::str(stream_name)
+    + SrsAmf0Size::str(type);
 }
 
-int SrsPublishPacket::encode_packet(SrsStream* stream)
+srs_error_t SrsPublishPacket::encode_packet(SrsBuffer* stream)
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
-    if ((ret = srs_amf0_write_string(stream, command_name)) != ERROR_SUCCESS) {
-        srs_error("encode command_name failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_write_string(stream, command_name)) != srs_success) {
+        return srs_error_wrap(err, "command_name");
     }
-    srs_verbose("encode command_name success.");
     
-    if ((ret = srs_amf0_write_number(stream, transaction_id)) != ERROR_SUCCESS) {
-        srs_error("encode transaction_id failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_write_number(stream, transaction_id)) != srs_success) {
+        return srs_error_wrap(err, "transaction_id");
     }
-    srs_verbose("encode transaction_id success.");
     
-    if ((ret = srs_amf0_write_null(stream)) != ERROR_SUCCESS) {
-        srs_error("encode command_object failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_write_null(stream)) != srs_success) {
+        return srs_error_wrap(err, "command_object");
     }
-    srs_verbose("encode command_object success.");
     
-    if ((ret = srs_amf0_write_string(stream, stream_name)) != ERROR_SUCCESS) {
-        srs_error("encode stream_name failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_write_string(stream, stream_name)) != srs_success) {
+        return srs_error_wrap(err, "stream_name");
     }
-    srs_verbose("encode stream_name success.");
     
-    if ((ret = srs_amf0_write_string(stream, type)) != ERROR_SUCCESS) {
-        srs_error("encode type failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_write_string(stream, type)) != srs_success) {
+        return srs_error_wrap(err, "type");
     }
-    srs_verbose("encode type success.");
     
-    srs_info("encode play request packet success.");
-    
-    return ret;
+    return err;
 }
 
 SrsPausePacket::SrsPausePacket()
@@ -4250,7 +3823,7 @@ SrsPausePacket::SrsPausePacket()
     command_name = RTMP_AMF0_COMMAND_PAUSE;
     transaction_id = 0;
     command_object = SrsAmf0Any::null();
-
+    
     time_ms = 0;
     is_pause = true;
 }
@@ -4260,44 +3833,34 @@ SrsPausePacket::~SrsPausePacket()
     srs_freep(command_object);
 }
 
-int SrsPausePacket::decode(SrsStream* stream)
+srs_error_t SrsPausePacket::decode(SrsBuffer* stream)
 {
-    int ret = ERROR_SUCCESS;
-
-    if ((ret = srs_amf0_read_string(stream, command_name)) != ERROR_SUCCESS) {
-        srs_error("amf0 decode pause command_name failed. ret=%d", ret);
-        return ret;
+    srs_error_t err = srs_success;
+    
+    if ((err = srs_amf0_read_string(stream, command_name)) != srs_success) {
+        return srs_error_wrap(err, "command_name");
     }
     if (command_name.empty() || command_name != RTMP_AMF0_COMMAND_PAUSE) {
-        ret = ERROR_RTMP_AMF0_DECODE;
-        srs_error("amf0 decode pause command_name failed. "
-            "command_name=%s, ret=%d", command_name.c_str(), ret);
-        return ret;
+        return srs_error_new(ERROR_RTMP_AMF0_DECODE, "invalid command_name=%s", command_name.c_str());
     }
     
-    if ((ret = srs_amf0_read_number(stream, transaction_id)) != ERROR_SUCCESS) {
-        srs_error("amf0 decode pause transaction_id failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_read_number(stream, transaction_id)) != srs_success) {
+        return srs_error_wrap(err, "transaction_id");
     }
     
-    if ((ret = srs_amf0_read_null(stream)) != ERROR_SUCCESS) {
-        srs_error("amf0 decode pause command_object failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_read_null(stream)) != srs_success) {
+        return srs_error_wrap(err, "command_object");
     }
     
-    if ((ret = srs_amf0_read_boolean(stream, is_pause)) != ERROR_SUCCESS) {
-        srs_error("amf0 decode pause is_pause failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_read_boolean(stream, is_pause)) != srs_success) {
+        return srs_error_wrap(err, "is_pause");
     }
     
-    if ((ret = srs_amf0_read_number(stream, time_ms)) != ERROR_SUCCESS) {
-        srs_error("amf0 decode pause time_ms failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_read_number(stream, time_ms)) != srs_success) {
+        return srs_error_wrap(err, "time");
     }
     
-    srs_info("amf0 decode pause packet success");
-    
-    return ret;
+    return err;
 }
 
 SrsPlayPacket::SrsPlayPacket()
@@ -4305,7 +3868,7 @@ SrsPlayPacket::SrsPlayPacket()
     command_name = RTMP_AMF0_COMMAND_PLAY;
     transaction_id = 0;
     command_object = SrsAmf0Any::null();
-
+    
     start = -2;
     duration = -1;
     reset = true;
@@ -4316,54 +3879,43 @@ SrsPlayPacket::~SrsPlayPacket()
     srs_freep(command_object);
 }
 
-int SrsPlayPacket::decode(SrsStream* stream)
+srs_error_t SrsPlayPacket::decode(SrsBuffer* stream)
 {
-    int ret = ERROR_SUCCESS;
-
-    if ((ret = srs_amf0_read_string(stream, command_name)) != ERROR_SUCCESS) {
-        srs_error("amf0 decode play command_name failed. ret=%d", ret);
-        return ret;
+    srs_error_t err = srs_success;
+    
+    if ((err = srs_amf0_read_string(stream, command_name)) != srs_success) {
+        return srs_error_wrap(err, "command_name");
     }
     if (command_name.empty() || command_name != RTMP_AMF0_COMMAND_PLAY) {
-        ret = ERROR_RTMP_AMF0_DECODE;
-        srs_error("amf0 decode play command_name failed. "
-            "command_name=%s, ret=%d", command_name.c_str(), ret);
-        return ret;
+        return srs_error_new(ERROR_RTMP_AMF0_DECODE, "invalid command_name=%s", command_name.c_str());
     }
     
-    if ((ret = srs_amf0_read_number(stream, transaction_id)) != ERROR_SUCCESS) {
-        srs_error("amf0 decode play transaction_id failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_read_number(stream, transaction_id)) != srs_success) {
+        return srs_error_wrap(err, "transaction_id");
     }
     
-    if ((ret = srs_amf0_read_null(stream)) != ERROR_SUCCESS) {
-        srs_error("amf0 decode play command_object failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_read_null(stream)) != srs_success) {
+        return srs_error_wrap(err, "command_object");
     }
     
-    if ((ret = srs_amf0_read_string(stream, stream_name)) != ERROR_SUCCESS) {
-        srs_error("amf0 decode play stream_name failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_read_string(stream, stream_name)) != srs_success) {
+        return srs_error_wrap(err, "stream_name");
     }
     
-    if (!stream->empty() && (ret = srs_amf0_read_number(stream, start)) != ERROR_SUCCESS) {
-        srs_error("amf0 decode play start failed. ret=%d", ret);
-        return ret;
+    if (!stream->empty() && (err = srs_amf0_read_number(stream, start)) != srs_success) {
+        return srs_error_wrap(err, "start");
     }
-    if (!stream->empty() && (ret = srs_amf0_read_number(stream, duration)) != ERROR_SUCCESS) {
-        srs_error("amf0 decode play duration failed. ret=%d", ret);
-        return ret;
+    if (!stream->empty() && (err = srs_amf0_read_number(stream, duration)) != srs_success) {
+        return srs_error_wrap(err, "duration");
     }
-
+    
     if (stream->empty()) {
-        return ret;
+        return err;
     }
     
     SrsAmf0Any* reset_value = NULL;
-    if ((ret = srs_amf0_read_any(stream, &reset_value)) != ERROR_SUCCESS) {
-        ret = ERROR_RTMP_AMF0_DECODE;
-        srs_error("amf0 read play reset marker failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_read_any(stream, &reset_value)) != srs_success) {
+        return srs_error_new(ERROR_RTMP_AMF0_DECODE, "reset");
     }
     SrsAutoFree(SrsAmf0Any, reset_value);
     
@@ -4376,15 +3928,11 @@ int SrsPlayPacket::decode(SrsStream* stream)
         } else if (reset_value->is_number()) {
             reset = (reset_value->to_number() != 0);
         } else {
-            ret = ERROR_RTMP_AMF0_DECODE;
-            srs_error("amf0 invalid type=%#x, requires number or bool, ret=%d", reset_value->marker, ret);
-            return ret;
+            return srs_error_new(ERROR_RTMP_AMF0_DECODE, "invalid marker=%#x", (uint8_t)reset_value->marker);
         }
     }
-
-    srs_info("amf0 decode play packet success");
     
-    return ret;
+    return err;
 }
 
 int SrsPlayPacket::get_prefer_cid()
@@ -4400,7 +3948,7 @@ int SrsPlayPacket::get_message_type()
 int SrsPlayPacket::get_size()
 {
     int size = SrsAmf0Size::str(command_name) + SrsAmf0Size::number()
-        + SrsAmf0Size::null() + SrsAmf0Size::str(stream_name);
+    + SrsAmf0Size::null() + SrsAmf0Size::str(stream_name);
     
     if (start != -2 || duration != -1 || !reset) {
         size += SrsAmf0Size::number();
@@ -4417,55 +3965,39 @@ int SrsPlayPacket::get_size()
     return size;
 }
 
-int SrsPlayPacket::encode_packet(SrsStream* stream)
+srs_error_t SrsPlayPacket::encode_packet(SrsBuffer* stream)
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
-    if ((ret = srs_amf0_write_string(stream, command_name)) != ERROR_SUCCESS) {
-        srs_error("encode command_name failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_write_string(stream, command_name)) != srs_success) {
+        return srs_error_wrap(err, "command_name");
     }
-    srs_verbose("encode command_name success.");
     
-    if ((ret = srs_amf0_write_number(stream, transaction_id)) != ERROR_SUCCESS) {
-        srs_error("encode transaction_id failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_write_number(stream, transaction_id)) != srs_success) {
+        return srs_error_wrap(err, "transaction_id");
     }
-    srs_verbose("encode transaction_id success.");
     
-    if ((ret = srs_amf0_write_null(stream)) != ERROR_SUCCESS) {
-        srs_error("encode command_object failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_write_null(stream)) != srs_success) {
+        return srs_error_wrap(err, "command_object");
     }
-    srs_verbose("encode command_object success.");
     
-    if ((ret = srs_amf0_write_string(stream, stream_name)) != ERROR_SUCCESS) {
-        srs_error("encode stream_name failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_write_string(stream, stream_name)) != srs_success) {
+        return srs_error_wrap(err, "stream_name");
     }
-    srs_verbose("encode stream_name success.");
     
-    if ((start != -2 || duration != -1 || !reset) && (ret = srs_amf0_write_number(stream, start)) != ERROR_SUCCESS) {
-        srs_error("encode start failed. ret=%d", ret);
-        return ret;
+    if ((start != -2 || duration != -1 || !reset) && (err = srs_amf0_write_number(stream, start)) != srs_success) {
+        return srs_error_wrap(err, "start");
     }
-    srs_verbose("encode start success.");
     
-    if ((duration != -1 || !reset) && (ret = srs_amf0_write_number(stream, duration)) != ERROR_SUCCESS) {
-        srs_error("encode duration failed. ret=%d", ret);
-        return ret;
+    if ((duration != -1 || !reset) && (err = srs_amf0_write_number(stream, duration)) != srs_success) {
+        return srs_error_wrap(err, "duration");
     }
-    srs_verbose("encode duration success.");
     
-    if (!reset && (ret = srs_amf0_write_boolean(stream, reset)) != ERROR_SUCCESS) {
-        srs_error("encode reset failed. ret=%d", ret);
-        return ret;
+    if (!reset && (err = srs_amf0_write_boolean(stream, reset)) != srs_success) {
+        return srs_error_wrap(err, "reset");
     }
-    srs_verbose("encode reset success.");
     
-    srs_info("encode play request packet success.");
-    
-    return ret;
+    return err;
 }
 
 SrsPlayResPacket::SrsPlayResPacket()
@@ -4495,41 +4027,30 @@ int SrsPlayResPacket::get_message_type()
 int SrsPlayResPacket::get_size()
 {
     return SrsAmf0Size::str(command_name) + SrsAmf0Size::number()
-        + SrsAmf0Size::null() + SrsAmf0Size::object(desc);
+    + SrsAmf0Size::null() + SrsAmf0Size::object(desc);
 }
 
-int SrsPlayResPacket::encode_packet(SrsStream* stream)
+srs_error_t SrsPlayResPacket::encode_packet(SrsBuffer* stream)
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
-    if ((ret = srs_amf0_write_string(stream, command_name)) != ERROR_SUCCESS) {
-        srs_error("encode command_name failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_write_string(stream, command_name)) != srs_success) {
+        return srs_error_wrap(err, "command_name");
     }
-    srs_verbose("encode command_name success.");
     
-    if ((ret = srs_amf0_write_number(stream, transaction_id)) != ERROR_SUCCESS) {
-        srs_error("encode transaction_id failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_write_number(stream, transaction_id)) != srs_success) {
+        return srs_error_wrap(err, "transaction_id");
     }
-    srs_verbose("encode transaction_id success.");
     
-    if ((ret = srs_amf0_write_null(stream)) != ERROR_SUCCESS) {
-        srs_error("encode command_object failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_write_null(stream)) != srs_success) {
+        return srs_error_wrap(err, "command_object");
     }
-    srs_verbose("encode command_object success.");
     
-    if ((ret = desc->write(stream)) != ERROR_SUCCESS) {
-        srs_error("encode desc failed. ret=%d", ret);
-        return ret;
+    if ((err = desc->write(stream)) != srs_success) {
+        return srs_error_wrap(err, "desc");
     }
-    srs_verbose("encode desc success.");
     
-    
-    srs_info("encode play response packet success.");
-    
-    return ret;
+    return err;
 }
 
 SrsOnBWDonePacket::SrsOnBWDonePacket()
@@ -4557,34 +4078,26 @@ int SrsOnBWDonePacket::get_message_type()
 int SrsOnBWDonePacket::get_size()
 {
     return SrsAmf0Size::str(command_name) + SrsAmf0Size::number()
-        + SrsAmf0Size::null();
+    + SrsAmf0Size::null();
 }
 
-int SrsOnBWDonePacket::encode_packet(SrsStream* stream)
+srs_error_t SrsOnBWDonePacket::encode_packet(SrsBuffer* stream)
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
-    if ((ret = srs_amf0_write_string(stream, command_name)) != ERROR_SUCCESS) {
-        srs_error("encode command_name failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_write_string(stream, command_name)) != srs_success) {
+        return srs_error_wrap(err, "command_name");
     }
-    srs_verbose("encode command_name success.");
     
-    if ((ret = srs_amf0_write_number(stream, transaction_id)) != ERROR_SUCCESS) {
-        srs_error("encode transaction_id failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_write_number(stream, transaction_id)) != srs_success) {
+        return srs_error_wrap(err, "transaction_id");
     }
-    srs_verbose("encode transaction_id success.");
     
-    if ((ret = srs_amf0_write_null(stream)) != ERROR_SUCCESS) {
-        srs_error("encode args failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_write_null(stream)) != srs_success) {
+        return srs_error_wrap(err, "args");
     }
-    srs_verbose("encode args success.");
     
-    srs_info("encode onBWDone packet success.");
-    
-    return ret;
+    return err;
 }
 
 SrsOnStatusCallPacket::SrsOnStatusCallPacket()
@@ -4614,40 +4127,30 @@ int SrsOnStatusCallPacket::get_message_type()
 int SrsOnStatusCallPacket::get_size()
 {
     return SrsAmf0Size::str(command_name) + SrsAmf0Size::number()
-        + SrsAmf0Size::null() + SrsAmf0Size::object(data);
+    + SrsAmf0Size::null() + SrsAmf0Size::object(data);
 }
 
-int SrsOnStatusCallPacket::encode_packet(SrsStream* stream)
+srs_error_t SrsOnStatusCallPacket::encode_packet(SrsBuffer* stream)
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
-    if ((ret = srs_amf0_write_string(stream, command_name)) != ERROR_SUCCESS) {
-        srs_error("encode command_name failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_write_string(stream, command_name)) != srs_success) {
+        return srs_error_wrap(err, "command_name");
     }
-    srs_verbose("encode command_name success.");
     
-    if ((ret = srs_amf0_write_number(stream, transaction_id)) != ERROR_SUCCESS) {
-        srs_error("encode transaction_id failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_write_number(stream, transaction_id)) != srs_success) {
+        return srs_error_wrap(err, "transaction_id");
     }
-    srs_verbose("encode transaction_id success.");
     
-    if ((ret = srs_amf0_write_null(stream)) != ERROR_SUCCESS) {
-        srs_error("encode args failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_write_null(stream)) != srs_success) {
+        return srs_error_wrap(err, "args");
     }
-    srs_verbose("encode args success.");;
     
-    if ((ret = data->write(stream)) != ERROR_SUCCESS) {
-        srs_error("encode data failed. ret=%d", ret);
-        return ret;
+    if ((err = data->write(stream)) != srs_success) {
+        return srs_error_wrap(err, "data");
     }
-    srs_verbose("encode data success.");
     
-    srs_info("encode onStatus(Call) packet success.");
-    
-    return ret;
+    return err;
 }
 
 SrsBandwidthPacket::SrsBandwidthPacket()
@@ -4664,37 +4167,31 @@ SrsBandwidthPacket::~SrsBandwidthPacket()
     srs_freep(data);
 }
 
-int SrsBandwidthPacket::decode(SrsStream *stream)
+srs_error_t SrsBandwidthPacket::decode(SrsBuffer *stream)
 {
-    int ret = ERROR_SUCCESS;
-
-    if ((ret = srs_amf0_read_string(stream, command_name)) != ERROR_SUCCESS) {
-        srs_error("amf0 decode bwtc command_name failed. ret=%d", ret);
-        return ret;
+    srs_error_t err = srs_success;
+    
+    if ((err = srs_amf0_read_string(stream, command_name)) != srs_success) {
+        return srs_error_wrap(err, "command_name");
     }
-
-    if ((ret = srs_amf0_read_number(stream, transaction_id)) != ERROR_SUCCESS) {
-        srs_error("amf0 decode bwtc transaction_id failed. ret=%d", ret);
-        return ret;
+    
+    if ((err = srs_amf0_read_number(stream, transaction_id)) != srs_success) {
+        return srs_error_wrap(err, "transaction_id");
     }
-
-    if ((ret = srs_amf0_read_null(stream)) != ERROR_SUCCESS) {
-        srs_error("amf0 decode bwtc command_object failed. ret=%d", ret);
-        return ret;
+    
+    if ((err = srs_amf0_read_null(stream)) != srs_success) {
+        return srs_error_wrap(err, "command_object");
     }
     
     // @remark, for bandwidth test, ignore the data field.
     // only decode the stop-play, start-publish and finish packet.
     if (is_stop_play() || is_start_publish() || is_finish()) {
-        if ((ret = data->read(stream)) != ERROR_SUCCESS) {
-            srs_error("amf0 decode bwtc command_object failed. ret=%d", ret);
-            return ret;
+        if ((err = data->read(stream)) != srs_success) {
+            return srs_error_wrap(err, "command_object");
         }
     }
-
-    srs_info("decode SrsBandwidthPacket success.");
-
-    return ret;
+    
+    return err;
 }
 
 int SrsBandwidthPacket::get_prefer_cid()
@@ -4710,40 +4207,30 @@ int SrsBandwidthPacket::get_message_type()
 int SrsBandwidthPacket::get_size()
 {
     return SrsAmf0Size::str(command_name) + SrsAmf0Size::number()
-        + SrsAmf0Size::null() + SrsAmf0Size::object(data);
+    + SrsAmf0Size::null() + SrsAmf0Size::object(data);
 }
 
-int SrsBandwidthPacket::encode_packet(SrsStream* stream)
+srs_error_t SrsBandwidthPacket::encode_packet(SrsBuffer* stream)
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
-    if ((ret = srs_amf0_write_string(stream, command_name)) != ERROR_SUCCESS) {
-        srs_error("encode command_name failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_write_string(stream, command_name)) != srs_success) {
+        return srs_error_wrap(err, "command_name");
     }
-    srs_verbose("encode command_name success.");
     
-    if ((ret = srs_amf0_write_number(stream, transaction_id)) != ERROR_SUCCESS) {
-        srs_error("encode transaction_id failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_write_number(stream, transaction_id)) != srs_success) {
+        return srs_error_wrap(err, "transaction_id");
     }
-    srs_verbose("encode transaction_id success.");
     
-    if ((ret = srs_amf0_write_null(stream)) != ERROR_SUCCESS) {
-        srs_error("encode args failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_write_null(stream)) != srs_success) {
+        return srs_error_wrap(err, "args");
     }
-    srs_verbose("encode args success.");;
     
-    if ((ret = data->write(stream)) != ERROR_SUCCESS) {
-        srs_error("encode data failed. ret=%d", ret);
-        return ret;
+    if ((err = data->write(stream)) != srs_success) {
+        return srs_error_wrap(err, "data");
     }
-    srs_verbose("encode data success.");
     
-    srs_info("encode onStatus(Call) packet success.");
-    
-    return ret;
+    return err;
 }
 
 bool SrsBandwidthPacket::is_start_play()
@@ -4901,25 +4388,19 @@ int SrsOnStatusDataPacket::get_size()
     return SrsAmf0Size::str(command_name) + SrsAmf0Size::object(data);
 }
 
-int SrsOnStatusDataPacket::encode_packet(SrsStream* stream)
+srs_error_t SrsOnStatusDataPacket::encode_packet(SrsBuffer* stream)
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
-    if ((ret = srs_amf0_write_string(stream, command_name)) != ERROR_SUCCESS) {
-        srs_error("encode command_name failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_write_string(stream, command_name)) != srs_success) {
+        return srs_error_wrap(err, "command_name");
     }
-    srs_verbose("encode command_name success.");
     
-    if ((ret = data->write(stream)) != ERROR_SUCCESS) {
-        srs_error("encode data failed. ret=%d", ret);
-        return ret;
+    if ((err = data->write(stream)) != srs_success) {
+        return srs_error_wrap(err, "data");
     }
-    srs_verbose("encode data success.");
     
-    srs_info("encode onStatus(Data) packet success.");
-    
-    return ret;
+    return err;
 }
 
 SrsSampleAccessPacket::SrsSampleAccessPacket()
@@ -4946,34 +4427,26 @@ int SrsSampleAccessPacket::get_message_type()
 int SrsSampleAccessPacket::get_size()
 {
     return SrsAmf0Size::str(command_name)
-        + SrsAmf0Size::boolean() + SrsAmf0Size::boolean();
+    + SrsAmf0Size::boolean() + SrsAmf0Size::boolean();
 }
 
-int SrsSampleAccessPacket::encode_packet(SrsStream* stream)
+srs_error_t SrsSampleAccessPacket::encode_packet(SrsBuffer* stream)
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
-    if ((ret = srs_amf0_write_string(stream, command_name)) != ERROR_SUCCESS) {
-        srs_error("encode command_name failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_write_string(stream, command_name)) != srs_success) {
+        return srs_error_wrap(err, "command_name");
     }
-    srs_verbose("encode command_name success.");
     
-    if ((ret = srs_amf0_write_boolean(stream, video_sample_access)) != ERROR_SUCCESS) {
-        srs_error("encode video_sample_access failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_write_boolean(stream, video_sample_access)) != srs_success) {
+        return srs_error_wrap(err, "video sample access");
     }
-    srs_verbose("encode video_sample_access success.");
     
-    if ((ret = srs_amf0_write_boolean(stream, audio_sample_access)) != ERROR_SUCCESS) {
-        srs_error("encode audio_sample_access failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_write_boolean(stream, audio_sample_access)) != srs_success) {
+        return srs_error_wrap(err, "audio sample access");
     }
-    srs_verbose("encode audio_sample_access success.");;
     
-    srs_info("encode |RtmpSampleAccess packet success.");
-    
-    return ret;
+    return err;
 }
 
 SrsOnMetaDataPacket::SrsOnMetaDataPacket()
@@ -4987,54 +4460,46 @@ SrsOnMetaDataPacket::~SrsOnMetaDataPacket()
     srs_freep(metadata);
 }
 
-int SrsOnMetaDataPacket::decode(SrsStream* stream)
+srs_error_t SrsOnMetaDataPacket::decode(SrsBuffer* stream)
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
-    if ((ret = srs_amf0_read_string(stream, name)) != ERROR_SUCCESS) {
-        srs_error("decode metadata name failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_read_string(stream, name)) != srs_success) {
+        return srs_error_wrap(err, "name");
     }
-
+    
     // ignore the @setDataFrame
     if (name == SRS_CONSTS_RTMP_SET_DATAFRAME) {
-        if ((ret = srs_amf0_read_string(stream, name)) != ERROR_SUCCESS) {
-            srs_error("decode metadata name failed. ret=%d", ret);
-            return ret;
+        if ((err = srs_amf0_read_string(stream, name)) != srs_success) {
+            return srs_error_wrap(err, "name");
         }
     }
     
-    srs_verbose("decode metadata name success. name=%s", name.c_str());
-    
     // the metadata maybe object or ecma array
     SrsAmf0Any* any = NULL;
-    if ((ret = srs_amf0_read_any(stream, &any)) != ERROR_SUCCESS) {
-        srs_error("decode metadata metadata failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_read_any(stream, &any)) != srs_success) {
+        return srs_error_wrap(err, "metadata");
     }
     
     srs_assert(any);
     if (any->is_object()) {
         srs_freep(metadata);
         metadata = any->to_object();
-        srs_info("decode metadata object success");
-        return ret;
+        return err;
     }
     
     SrsAutoFree(SrsAmf0Any, any);
     
     if (any->is_ecma_array()) {
         SrsAmf0EcmaArray* arr = any->to_ecma_array();
-    
+        
         // if ecma array, copy to object.
         for (int i = 0; i < arr->count(); i++) {
             metadata->set(arr->key_at(i), arr->value_at(i)->copy());
         }
-        
-        srs_info("decode metadata array success");
     }
     
-    return ret;
+    return err;
 }
 
 int SrsOnMetaDataPacket::get_prefer_cid()
@@ -5052,24 +4517,19 @@ int SrsOnMetaDataPacket::get_size()
     return SrsAmf0Size::str(name) + SrsAmf0Size::object(metadata);
 }
 
-int SrsOnMetaDataPacket::encode_packet(SrsStream* stream)
+srs_error_t SrsOnMetaDataPacket::encode_packet(SrsBuffer* stream)
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
-    if ((ret = srs_amf0_write_string(stream, name)) != ERROR_SUCCESS) {
-        srs_error("encode name failed. ret=%d", ret);
-        return ret;
+    if ((err = srs_amf0_write_string(stream, name)) != srs_success) {
+        return srs_error_wrap(err, "name");
     }
-    srs_verbose("encode name success.");
     
-    if ((ret = metadata->write(stream)) != ERROR_SUCCESS) {
-        srs_error("encode metadata failed. ret=%d", ret);
-        return ret;
+    if ((err = metadata->write(stream)) != srs_success) {
+        return srs_error_wrap(err, "metadata");
     }
-    srs_verbose("encode metadata success.");
     
-    srs_info("encode onMetaData packet success.");
-    return ret;
+    return err;
 }
 
 SrsSetWindowAckSizePacket::SrsSetWindowAckSizePacket()
@@ -5081,20 +4541,17 @@ SrsSetWindowAckSizePacket::~SrsSetWindowAckSizePacket()
 {
 }
 
-int SrsSetWindowAckSizePacket::decode(SrsStream* stream)
+srs_error_t SrsSetWindowAckSizePacket::decode(SrsBuffer* stream)
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
     if (!stream->require(4)) {
-        ret = ERROR_RTMP_MESSAGE_DECODE;
-        srs_error("decode ack window size failed. ret=%d", ret);
-        return ret;
+        return srs_error_new(ERROR_RTMP_MESSAGE_DECODE, "requires 4 only %d bytes", stream->left());
     }
     
     ackowledgement_window_size = stream->read_4bytes();
-    srs_info("decode ack window size success");
     
-    return ret;
+    return err;
 }
 
 int SrsSetWindowAckSizePacket::get_prefer_cid()
@@ -5112,22 +4569,17 @@ int SrsSetWindowAckSizePacket::get_size()
     return 4;
 }
 
-int SrsSetWindowAckSizePacket::encode_packet(SrsStream* stream)
+srs_error_t SrsSetWindowAckSizePacket::encode_packet(SrsBuffer* stream)
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
     if (!stream->require(4)) {
-        ret = ERROR_RTMP_MESSAGE_ENCODE;
-        srs_error("encode ack size packet failed. ret=%d", ret);
-        return ret;
+        return srs_error_new(ERROR_RTMP_MESSAGE_ENCODE, "requires 4 only %d bytes", stream->left());
     }
     
     stream->write_4bytes(ackowledgement_window_size);
     
-    srs_verbose("encode ack size packet "
-        "success. ack_size=%d", ackowledgement_window_size);
-    
-    return ret;
+    return err;
 }
 
 SrsAcknowledgementPacket::SrsAcknowledgementPacket()
@@ -5139,20 +4591,17 @@ SrsAcknowledgementPacket::~SrsAcknowledgementPacket()
 {
 }
 
-int SrsAcknowledgementPacket::decode(SrsStream* stream)
+srs_error_t SrsAcknowledgementPacket::decode(SrsBuffer* stream)
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
     if (!stream->require(4)) {
-        ret = ERROR_RTMP_MESSAGE_DECODE;
-        srs_error("decode acknowledgement failed. ret=%d", ret);
-        return ret;
+        return srs_error_new(ERROR_RTMP_MESSAGE_DECODE, "requires 4 only %d bytes", stream->left());
     }
     
     sequence_number = (uint32_t)stream->read_4bytes();
-    srs_info("decode acknowledgement success");
     
-    return ret;
+    return err;
 }
 
 int SrsAcknowledgementPacket::get_prefer_cid()
@@ -5170,22 +4619,17 @@ int SrsAcknowledgementPacket::get_size()
     return 4;
 }
 
-int SrsAcknowledgementPacket::encode_packet(SrsStream* stream)
+srs_error_t SrsAcknowledgementPacket::encode_packet(SrsBuffer* stream)
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
     if (!stream->require(4)) {
-        ret = ERROR_RTMP_MESSAGE_ENCODE;
-        srs_error("encode acknowledgement packet failed. ret=%d", ret);
-        return ret;
+        return srs_error_new(ERROR_RTMP_MESSAGE_ENCODE, "requires 4 only %d bytes", stream->left());
     }
     
     stream->write_4bytes(sequence_number);
     
-    srs_verbose("encode acknowledgement packet "
-        "success. sequence_number=%d", sequence_number);
-    
-    return ret;
+    return err;
 }
 
 SrsSetChunkSizePacket::SrsSetChunkSizePacket()
@@ -5197,20 +4641,17 @@ SrsSetChunkSizePacket::~SrsSetChunkSizePacket()
 {
 }
 
-int SrsSetChunkSizePacket::decode(SrsStream* stream)
+srs_error_t SrsSetChunkSizePacket::decode(SrsBuffer* stream)
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
     if (!stream->require(4)) {
-        ret = ERROR_RTMP_MESSAGE_DECODE;
-        srs_error("decode chunk size failed. ret=%d", ret);
-        return ret;
+        return srs_error_new(ERROR_RTMP_MESSAGE_DECODE, "requires 4 only %d bytes", stream->left());
     }
     
     chunk_size = stream->read_4bytes();
-    srs_info("decode chunk size success. chunk_size=%d", chunk_size);
     
-    return ret;
+    return err;
 }
 
 int SrsSetChunkSizePacket::get_prefer_cid()
@@ -5228,21 +4669,17 @@ int SrsSetChunkSizePacket::get_size()
     return 4;
 }
 
-int SrsSetChunkSizePacket::encode_packet(SrsStream* stream)
+srs_error_t SrsSetChunkSizePacket::encode_packet(SrsBuffer* stream)
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
     if (!stream->require(4)) {
-        ret = ERROR_RTMP_MESSAGE_ENCODE;
-        srs_error("encode chunk packet failed. ret=%d", ret);
-        return ret;
+        return srs_error_new(ERROR_RTMP_MESSAGE_ENCODE, "requires 4 only %d bytes", stream->left());
     }
     
     stream->write_4bytes(chunk_size);
     
-    srs_verbose("encode chunk packet success. ack_size=%d", chunk_size);
-    
-    return ret;
+    return err;
 }
 
 SrsSetPeerBandwidthPacket::SrsSetPeerBandwidthPacket()
@@ -5270,23 +4707,18 @@ int SrsSetPeerBandwidthPacket::get_size()
     return 5;
 }
 
-int SrsSetPeerBandwidthPacket::encode_packet(SrsStream* stream)
+srs_error_t SrsSetPeerBandwidthPacket::encode_packet(SrsBuffer* stream)
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
     if (!stream->require(5)) {
-        ret = ERROR_RTMP_MESSAGE_ENCODE;
-        srs_error("encode set bandwidth packet failed. ret=%d", ret);
-        return ret;
+        return srs_error_new(ERROR_RTMP_MESSAGE_ENCODE, "requires 5 only %d bytes", stream->left());
     }
     
     stream->write_4bytes(bandwidth);
     stream->write_1bytes(type);
     
-    srs_verbose("encode set bandwidth packet "
-        "success. bandwidth=%d, type=%d", bandwidth, type);
-    
-    return ret;
+    return err;
 }
 
 SrsUserControlPacket::SrsUserControlPacket()
@@ -5300,48 +4732,36 @@ SrsUserControlPacket::~SrsUserControlPacket()
 {
 }
 
-int SrsUserControlPacket::decode(SrsStream* stream)
+srs_error_t SrsUserControlPacket::decode(SrsBuffer* stream)
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
     if (!stream->require(2)) {
-        ret = ERROR_RTMP_MESSAGE_DECODE;
-        srs_error("decode user control failed. ret=%d", ret);
-        return ret;
+        return srs_error_new(ERROR_RTMP_MESSAGE_DECODE, "requires 2 only %d bytes", stream->left());
     }
     
     event_type = stream->read_2bytes();
     
     if (event_type == SrsPCUCFmsEvent0) {
         if (!stream->require(1)) {
-            ret = ERROR_RTMP_MESSAGE_DECODE;
-            srs_error("decode user control failed. ret=%d", ret);
-            return ret;
+            return srs_error_new(ERROR_RTMP_MESSAGE_DECODE, "requires 1 only %d bytes", stream->left());
         }
         event_data = stream->read_1bytes();
     } else {
         if (!stream->require(4)) {
-            ret = ERROR_RTMP_MESSAGE_DECODE;
-            srs_error("decode user control failed. ret=%d", ret);
-            return ret;
+            return srs_error_new(ERROR_RTMP_MESSAGE_DECODE, "requires 4 only %d bytes", stream->left());
         }
         event_data = stream->read_4bytes();
     }
     
     if (event_type == SrcPCUCSetBufferLength) {
         if (!stream->require(4)) {
-            ret = ERROR_RTMP_MESSAGE_ENCODE;
-            srs_error("decode user control packet failed. ret=%d", ret);
-            return ret;
+            return srs_error_new(ERROR_RTMP_MESSAGE_ENCODE, "requires 4 only %d bytes", stream->left());
         }
         extra_data = stream->read_4bytes();
     }
     
-    srs_info("decode user control success. "
-        "event_type=%d, event_data=%d, extra_data=%d", 
-        event_type, event_data, extra_data);
-    
-    return ret;
+    return err;
 }
 
 int SrsUserControlPacket::get_prefer_cid()
@@ -5371,14 +4791,12 @@ int SrsUserControlPacket::get_size()
     return size;
 }
 
-int SrsUserControlPacket::encode_packet(SrsStream* stream)
+srs_error_t SrsUserControlPacket::encode_packet(SrsBuffer* stream)
 {
-    int ret = ERROR_SUCCESS;
+    srs_error_t err = srs_success;
     
     if (!stream->require(get_size())) {
-        ret = ERROR_RTMP_MESSAGE_ENCODE;
-        srs_error("encode user control packet failed. ret=%d", ret);
-        return ret;
+        return srs_error_new(ERROR_RTMP_MESSAGE_ENCODE, "requires %d only %d bytes", get_size(), stream->left());
     }
     
     stream->write_2bytes(event_type);
@@ -5388,18 +4806,14 @@ int SrsUserControlPacket::encode_packet(SrsStream* stream)
     } else {
         stream->write_4bytes(event_data);
     }
-
+    
     // when event type is set buffer length,
     // write the extra buffer length.
     if (event_type == SrcPCUCSetBufferLength) {
         stream->write_4bytes(extra_data);
-        srs_verbose("user control message, buffer_length=%d", extra_data);
     }
     
-    srs_verbose("encode user control packet success. "
-        "event_type=%d, event_data=%d", event_type, event_data);
-    
-    return ret;
+    return err;
 }
 
 
