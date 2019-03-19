@@ -281,3 +281,44 @@ char *add_aac_adts(char *data, unsigned int size) {
     flush_put_bits(&pb);
     return adts_data;
 }
+
+int create_AACSequenceHeader(char **data, char *sequence, int size) {
+    int sequence_size = 4;
+    (*data) = malloc(sequence_size);
+    PutBitContext pb;
+    init_put_bits(&pb, *data, sequence_size);
+
+    put_bits(&pb, 4, 10);//sound format aac=10
+    put_bits(&pb, 2, 2);//44kHz=3
+    put_bits(&pb, 1, 1);
+    put_bits(&pb, 1, 0);
+
+    put_bits(&pb, 8, 0);//0:aac sequence header; 1:raw
+
+    put_bits(&pb, 5, 2);//profile_objecttype
+    put_bits(&pb, 4, 4);//sample rate index
+    put_bits(&pb, 4, 1);//
+    put_bits(&pb, 1, 0);
+    put_bits(&pb, 1, 0);
+    put_bits(&pb, 1, 0);
+
+
+    flush_put_bits(&pb);
+    return sequence_size;
+}
+
+int create_AudioPacket(char **data, char *nalu, int type, int size, int time) {
+    int nalu_size = size + 2;
+    (*data) = (char *) malloc(nalu_size);
+    PutBitContext pb;
+    init_put_bits(&pb, *data, 2);
+    put_bits(&pb, 4, 10);//sound format aac=10
+    put_bits(&pb, 2, 2);//44kHz=3
+    put_bits(&pb, 1, 1);//1 = 16-bit samples
+    put_bits(&pb, 1, 0);//0 = Mono sound
+
+    put_bits(&pb, 8, 1);//0 = AAC sequence header，1 = AAC raw。第一个音频包用0，后面的都用1
+    flush_put_bits(&pb);
+    memcpy(*data + 2, nalu, size);
+    return nalu_size;
+}

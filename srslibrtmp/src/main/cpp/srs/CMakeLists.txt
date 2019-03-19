@@ -29,17 +29,12 @@ set(libs
         libs/srs_librtmp.cpp)
 
 set(protocol
-        protocol/srs_http_stack.cpp
-        protocol/srs_protocol_buffer.cpp
         protocol/srs_protocol_json.cpp
         protocol/srs_protocol_kbps.cpp
         protocol/srs_raw_avc.cpp
-        protocol/srs_rtmp_amf0.cpp
         protocol/srs_rtmp_handshake.cpp
-        protocol/srs_rtmp_io.cpp
         protocol/srs_rtmp_msg_array.cpp
         protocol/srs_rtmp_stack.cpp
-        protocol/srs_rtmp_utility.cpp
         protocol/srs_rtsp_stack.cpp
         protocol/srs_kafka_stack.cpp
         protocol/srs_protocol_amf0.cpp
@@ -68,7 +63,7 @@ set(srs-librtmp
 add_library(srsrtmp STATIC ${srs-librtmp})
 
 target_include_directories(srsrtmp
-        PRIVATE core kernel protocol
+        PRIVATE  core kernel protocol
         PUBLIC libs)
 
 find_library(lib-log log)

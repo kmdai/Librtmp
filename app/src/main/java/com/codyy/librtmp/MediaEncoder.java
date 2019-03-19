@@ -39,9 +39,11 @@ public class MediaEncoder {
     private double mFrameRate;
     private int mBitrate;
     private final int TIMEOUT_US = 10000;
+
     private final int AUDIO_SAMPLE_RATE = 44100;
     private final int AUDIO_BIT_RATE = 96000;
     private final int AUDIO_CHANNEL_COUNT = 1;
+
     AtomicBoolean mIsStop;
     //    private LibrtmpManager mLibrtmpManager;
     private String mRtmpUrl = "rtmp://10.23.164.30:1935/srs/kmdai";
@@ -123,7 +125,10 @@ public class MediaEncoder {
             e.printStackTrace();
         }
         mediaFormat.setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AACObjectLC);
+        mediaFormat.setInteger(MediaFormat.KEY_CHANNEL_COUNT, 1);
+        mediaFormat.setInteger(MediaFormat.KEY_SAMPLE_RATE, AUDIO_SAMPLE_RATE);
         mediaFormat.setInteger(MediaFormat.KEY_BIT_RATE, AUDIO_BIT_RATE);
+
         mAudioCodec.configure(mediaFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
 
         //最小的缓冲区
@@ -157,7 +162,6 @@ public class MediaEncoder {
                     PCM pcm = new PCM();
                     pcm.data = data;
                     pcm.time = PCM.currentTime();
-//                mPCMS.offer(pcm);
                     addPCM(pcm);
                 }
             }
@@ -168,7 +172,6 @@ public class MediaEncoder {
 
         @Override
         public void run() {
-            MediaCodec.BufferInfo bufferInfo = new MediaCodec.BufferInfo();
             for (; ; ) {
                 mLock.lock();
                 PCM pcm = null;
@@ -181,8 +184,6 @@ public class MediaEncoder {
                     if (mIsStop.get()) {
                         mLock.unlock();
                         mAudioRecord.stop();
-//                        mAudioCodec.stop();
-//                        mAudioCodec.release();
                         Log.d("---", "mAudioRecord:release");
                         return;
                     }
@@ -196,27 +197,6 @@ public class MediaEncoder {
                     inputBuffer.put(pcm.data, 0, pcm.data.length);
                     mAudioCodec.queueInputBuffer(inputId, 0, pcm.data.length, pcm.time, 0);
                 }
-//                int outputBufferId = mAudioCodec.dequeueOutputBuffer(bufferInfo, TIMEOUT_US);
-//                if (outputBufferId >= 0) {
-//                    ByteBuffer outputBuffer = mAudioCodec.getOutputBuffer(outputBufferId);
-//                    if (outputBuffer != null) {
-//                        outputBuffer.position(bufferInfo.offset);
-//                        outputBuffer.limit(bufferInfo.offset + bufferInfo.size);
-//                        byte[] outData = new byte[bufferInfo.size + 7];
-//                        addADTStoPacket(outData, outData.length);
-//                        outputBuffer.get(outData, bufferInfo.offset + 7, bufferInfo.size);
-//                        calcTotalAudioTime(bufferInfo.presentationTimeUs / 1000);
-//                        if (bufferInfo.flags == BUFFER_FLAG_CODEC_CONFIG) {
-////                            Log.d("RecordDecodec---", "BUFFER_FLAG_CODEC_CONFIG");
-//                            mSRSLibrtmpManager.addFrame(outData, outData.length, SRSLibrtmpManager.NODE_TYPE_AUDIO, bufferInfo.flags, 0);
-//                        } else {
-//                            Log.d("RecordDecodec---", "other--bufferInfo.offset:" + bufferInfo.offset + "bufferInfo.size:" + bufferInfo.size + "bufferInfo.time:" + bufferInfo.presentationTimeUs / 1000 + "--outData.length:" + outData.length + "--audioTimeIndex:" + audioTimeIndex);
-//                            mSRSLibrtmpManager.addFrame(outData, outData.length, SRSLibrtmpManager.NODE_TYPE_AUDIO, bufferInfo.flags, audioTimeIndex);
-//                        }
-//                        outputBuffer.clear();
-//                    }
-//                    mAudioCodec.releaseOutputBuffer(outputBufferId, false);
-//                }
             }
         }
     }
@@ -257,9 +237,9 @@ public class MediaEncoder {
                     if (outputBuffer != null) {
                         outputBuffer.position(bufferInfo.offset);
                         outputBuffer.limit(bufferInfo.offset + bufferInfo.size);
-                        byte[] outData = new byte[bufferInfo.size ];
+                        byte[] outData = new byte[bufferInfo.size];
 //                        addADTStoPacket(outData, outData.length);
-                        outputBuffer.get(outData, bufferInfo.offset , bufferInfo.size);
+                        outputBuffer.get(outData, bufferInfo.offset, bufferInfo.size);
                         calcTotalAudioTime(bufferInfo.presentationTimeUs / 1000);
                         if (bufferInfo.flags == BUFFER_FLAG_CODEC_CONFIG) {
 //                            Log.d("RecordDecodec---", "BUFFER_FLAG_CODEC_CONFIG");

@@ -40,6 +40,9 @@ int create_AVCVideoPacket(char **data, char *sps_pps, int size);
 
 int create_VideoPacket(char **data, char *nalu, int type, int size, int time);
 
+int create_AACSequenceHeader(char **data, char *sequence, int size);
+
+int create_AudioPacket(char **data, char *nalu, int type, int size, int time);
 char *add_aac_adts(char *data, unsigned int size);
 
 #endif //LIBRTMP_PUSH_FLVENC_H

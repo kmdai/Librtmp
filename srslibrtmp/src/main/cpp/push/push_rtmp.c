@@ -51,19 +51,11 @@ void add_frame(char *data, int32_t size, int32_t type, uint32_t time) {
 //    in_queue(node_p);
 }
 
-//void push_head(q_node_p node){
-//    int i=0;
-//    while(i<5){
-//        if(srs_audio_write_raw_frame()){
-//
-//        }
-//        i++;
-//    }
-//}
+
 void *push_data(void *gVm) {
     JavaVM *gvm = (JavaVM *) gVm;
     JNIEnv *env = NULL;
-    prctl(PR_SET_NAME,"rtmp push data");
+    prctl(PR_SET_NAME, "rtmp push data");
     if (0 != (*gvm)->AttachCurrentThread(gVm, &env, NULL)) {
         return (void *) 0;
     }
@@ -71,67 +63,48 @@ void *push_data(void *gVm) {
     for (;;) {
         q_node_p node_p = out_queue();
         if (NULL == node_p) {
-            srs_rtmp_destroy(srs_rtmp);
-            SRS_LOGE("node_p=NULL,DetachCurrentThread");
-            (*gvm)->DetachCurrentThread(gvm);
-            return (void *) 1;
+            break;
         }
         if (node_p->type == NODE_TYPE_AUDIO) {
-            char *adts_data = add_aac_adts(node_p->data, node_p->size);
-
-            if ((ret = srs_audio_write_raw_frame(srs_rtmp,
-                                                 10,
-                                                 3,
-                                                 1,
-                                                 0,
-                                                 adts_data, node_p->size + 7, node_p->time)) != 0) {
+            char *data;
+            int size = 0;
+            if (node_p->flag == NODE_FLAG_CODEC_CONFIG) {
+                size = create_AACSequenceHeader(&data, 0, 0);
+            } else {
+                size = create_AudioPacket(&data, node_p->data, node_p->flag, node_p->size, 0);
+            }
+            if ((ret = srs_rtmp_write_packet(srs_rtmp, SRS_RTMP_TYPE_AUDIO, node_p->time, data,
+                                             size)) != 0) {
                 SRS_LOGE("srs_audio_write_raw_frame error%d", ret);
             }
-            free(adts_data);
         } else if (node_p->type == NODE_TYPE_VIDEO) {
-            srs_h264_write_raw_frames(srs_rtmp, node_p->data, node_p->size, node_p->time,
-                                      node_p->time);
+            char *data;
+            int size = 0;
+            if (node_p->flag == NODE_FLAG_CODEC_CONFIG) {
+                size = create_AVCVideoPacket(&data, node_p->data, node_p->size);
+                srs_human_print_rtmp_packet(SRS_RTMP_TYPE_VIDEO, node_p->time, data, size);
+            } else {
+                size = create_VideoPacket(&data, node_p->data, node_p->flag, node_p->size, 0);
+                srs_human_print_rtmp_packet(SRS_RTMP_TYPE_VIDEO, node_p->time, data, size);
+            }
+            if ((ret = srs_rtmp_write_packet(srs_rtmp, SRS_RTMP_TYPE_VIDEO, node_p->time, data,
+                                             size)) !=
+                0) {
+                SRS_LOGE("srs_rtmp_write_packet fail:%d ", ret);
+            }
         }
-//        if (node_p->flag == NODE_FLAG_CODEC_CONFIG) {
-//            if (media_config_p) {
-//                char *meta;
-//                int metaSize = create_MetaData(&meta,
-//                                               media_config_p->framerate,
-//                                               media_config_p->videodatarate,
-//                                               7,
-//                                               media_config_p->width,
-//                                               media_config_p->height,
-//                                               10,
-//                                               media_config_p->audiodatarate,
-//                                               media_config_p->audiosamplerate,
-//                                               media_config_p->audiosamplesize,
-//                                               1);
-//                srs_human_print_rtmp_packet(SRS_RTMP_TYPE_SCRIPT, node_p->time, meta, metaSize);
-//                srs_rtmp_write_packet(srs_rtmp, SRS_RTMP_TYPE_SCRIPT, 0, meta, metaSize);
-//            }
-//            char *data;
-//            int size = create_AVCVideoPacket(&data, node_p->data, node_p->size);
-//            srs_rtmp_write_packet(srs_rtmp, SRS_RTMP_TYPE_VIDEO, 0, data, size);
-//            srs_human_print_rtmp_packet(SRS_RTMP_TYPE_VIDEO, node_p->time, data, size);
-//        } else {
-//            char *data;
-//            int size = create_VideoPacket(&data, node_p->data, node_p->flag, node_p->size, 0);
-//            srs_human_print_rtmp_packet(SRS_RTMP_TYPE_VIDEO, node_p->time, data, size);
-//            if ((ret = srs_rtmp_write_packet(srs_rtmp, SRS_RTMP_TYPE_VIDEO, node_p->time, data,
-//                                             size)) !=
-//                0) {
-//                SRS_LOGE("srs_rtmp_write_packet fail:%d ", ret);
-//            }
-//        }
-//        srs_h264_write_raw_frames(srs_rtmp,node_p->data,node_p->size,node_p->time,node_p->time);
         free(node_p);
     }
+    srs_rtmp_destroy(srs_rtmp);
+    SRS_LOGE("node_p=NULL,DetachCurrentThread");
+    (*gvm)->DetachCurrentThread(gvm);
+    return (void *) 1;
 }
 
 void rtmp_start(JavaVM *gVm) {
     pthread_t pthread;
     int result = pthread_create(&pthread, NULL, push_data, gVm);
-    pthread_setname_np(pthread,"rtmp push data");
+    pthread_setname_np(pthread, "rtmp push data");
 }
 
 void set_framerate(double framerate) {
