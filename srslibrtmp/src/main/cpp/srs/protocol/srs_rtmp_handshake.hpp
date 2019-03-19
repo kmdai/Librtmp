@@ -30,10 +30,10 @@ class ISrsProtocolReadWriter;
 class SrsComplexHandshake;
 class SrsHandshakeBytes;
 class SrsBuffer;
-
+#ifdef SRS_USE_SSL
 // for openssl.
 #include <openssl/hmac.h>
-
+#endif
 namespace _srs_internal
 {
     // the digest key generate size.
@@ -49,7 +49,9 @@ namespace _srs_internal
     class SrsDH
     {
     private:
+#ifdef SRS_USE_SSL
         DH* pdh;
+#endif
     public:
         SrsDH();
         virtual ~SrsDH();

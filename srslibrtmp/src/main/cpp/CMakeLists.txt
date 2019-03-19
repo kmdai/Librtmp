@@ -12,5 +12,9 @@ set(media
         media/MediaEncoder.cpp)
 
 add_library(srsPush SHARED ${push} ${media})
+
 target_include_directories(srsPush PRIVATE push media)
+target_compile_options(srsPush
+        PUBLIC
+        -Wpointer-sign)
 target_link_libraries(srsPush srsrtmp mediandk oboe)

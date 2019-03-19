@@ -62,8 +62,6 @@ void setAudiosamplesize(JNIEnv *env, jobject instance, jdouble audiosamplesize) 
     set_audiosamplesize(audiosamplesize);
 }
 
-jobject getSurface(JNIEnv *env, jobject instance) {
-}
 
 /**
  * 本地函数

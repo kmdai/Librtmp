@@ -35,7 +35,7 @@
 #include <srs_kernel_utility.hpp>
 
 using namespace _srs_internal;
-
+#ifdef SRS_USE_SSL
 // for openssl_HMACsha256
 #include <openssl/evp.h>
 #include <openssl/hmac.h>
@@ -107,7 +107,7 @@ static int DH_set_length(DH *dh, long length)
 }
 
 #endif
-
+#endif
 namespace _srs_internal
 {
     // 68bytes FMS key which is used to sign the sever packet.
@@ -350,7 +350,8 @@ namespace _srs_internal
         
         return err;
     }
-    
+
+#endif
     key_block::key_block()
     {
         offset = (int32_t)rand();
