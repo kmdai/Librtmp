@@ -11,6 +11,7 @@ import android.text.TextUtils;
 import android.util.Log;
 import android.view.Surface;
 
+import com.kmdai.rtmppush.LibrtmpManager;
 import com.kmdai.srslibrtmp.SRSLibrtmpManager;
 
 import java.io.IOException;
@@ -49,8 +50,8 @@ public class MediaEncoder {
     private String mRtmpUrl = "rtmp://10.23.164.30:1935/srs/kmdai";
     //                RTMPMuxer mRTMPMuxer;
     long indexTime = 0;
-    private SRSLibrtmpManager mSRSLibrtmpManager;
-
+//    private SRSLibrtmpManager mSRSLibrtmpManager;
+private LibrtmpManager mSRSLibrtmpManager;
     private int mMiniAudioBufferSize;
 
     public MediaEncoder(int width, int height, int framerate, int bitrate) {
@@ -62,8 +63,8 @@ public class MediaEncoder {
         mLock = new ReentrantLock();
         mCondition = mLock.newCondition();
         mPCMS = new LinkedList<>();
-        mSRSLibrtmpManager = new SRSLibrtmpManager();
-//        mLibrtmpManager = new LibrtmpManager();
+//        mSRSLibrtmpManager = new SRSLibrtmpManager();
+        mSRSLibrtmpManager = new LibrtmpManager();
         reset();
         MediaFormat mediaFormat = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, width, height);
         MediaCodecList mediaCodecList = new MediaCodecList(MediaCodecList.REGULAR_CODECS);
@@ -292,6 +293,7 @@ public class MediaEncoder {
 //            mLibrtmpManager.rtmpInit();
 //            mLibrtmpManager.setUrl(mRtmpUrl);
             if (!mSRSLibrtmpManager.setUrl(mRtmpUrl)) {
+                Log.d("---", "connect false");
                 return;
             }
             mSRSLibrtmpManager.setFrameRate(mFrameRate);
@@ -302,7 +304,6 @@ public class MediaEncoder {
             mSRSLibrtmpManager.setAudiosamplerate(44100);
             mSRSLibrtmpManager.setAudiosamplesize(16);
             MediaCodec.BufferInfo bufferInfo = new MediaCodec.BufferInfo();
-            int time = 0;
             for (; ; ) {
                 if (mIsStop.get()) {
                     break;

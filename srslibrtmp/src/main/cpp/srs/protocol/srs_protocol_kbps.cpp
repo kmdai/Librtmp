@@ -1,25 +1,25 @@
-/**
- * The MIT License (MIT)
- *
- * Copyright (c) 2013-2019 Winlin
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy of
- * this software and associated documentation files (the "Software"), to deal in
- * the Software without restriction, including without limitation the rights to
- * use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
- * the Software, and to permit persons to whom the Software is furnished to do so,
- * subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
- * FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
- * COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
- * IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- */
+/*
+The MIT License (MIT)
+
+Copyright (c) 2013-2015 SRS(ossrs)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*/
 
 #include <srs_protocol_kbps.hpp>
 
@@ -27,26 +27,14 @@
 
 SrsKbpsSample::SrsKbpsSample()
 {
-    bytes = time = -1;
+    bytes = time = 0;
     kbps = 0;
 }
 
-SrsKbpsSample::~SrsKbpsSample()
+SrsKbpsSlice::SrsKbpsSlice()
 {
-}
-
-SrsKbpsSample* SrsKbpsSample::update(int64_t b, int64_t t, int k)
-{
-    bytes = b;
-    time = t;
-    kbps = k;
-    return this;
-}
-
-SrsKbpsSlice::SrsKbpsSlice(SrsWallClock* c)
-{
-    clk = c;
-    io = NULL;
+    io.in = NULL;
+    io.out = NULL;
     last_bytes = io_bytes_base = starttime = bytes = delta_bytes = 0;
 }
 
@@ -61,64 +49,62 @@ int64_t SrsKbpsSlice::get_total_bytes()
 
 void SrsKbpsSlice::sample()
 {
-    int64_t now = clk->time_ms();
+    int64_t now = srs_get_system_time_ms();
     int64_t total_bytes = get_total_bytes();
     
-    if (sample_30s.time < 0) {
-        sample_30s.update(total_bytes, now, 0);
+    if (sample_30s.time <= 0) {
+        sample_30s.kbps = 0;
+        sample_30s.time = now;
+        sample_30s.bytes = total_bytes;
     }
-    if (sample_1m.time < 0) {
-        sample_1m.update(total_bytes, now, 0);
+    if (sample_1m.time <= 0) {
+        sample_1m.kbps = 0;
+        sample_1m.time = now;
+        sample_1m.bytes = total_bytes;
     }
-    if (sample_5m.time < 0) {
-        sample_5m.update(total_bytes, now, 0);
+    if (sample_5m.time <= 0) {
+        sample_5m.kbps = 0;
+        sample_5m.time = now;
+        sample_5m.bytes = total_bytes;
     }
-    if (sample_60m.time < 0) {
-        sample_60m.update(total_bytes, now, 0);
+    if (sample_60m.time <= 0) {
+        sample_60m.kbps = 0;
+        sample_60m.time = now;
+        sample_60m.bytes = total_bytes;
     }
     
-    if (now - sample_30s.time >= 30 * 1000) {
-        int kbps = (int)((total_bytes - sample_30s.bytes) * 8 / (now - sample_30s.time));
-        sample_30s.update(total_bytes, now, kbps);
+    if (now - sample_30s.time > 30 * 1000) {
+        sample_30s.kbps = (int)((total_bytes - sample_30s.bytes) * 8 / (now - sample_30s.time));
+        sample_30s.time = now;
+        sample_30s.bytes = total_bytes;
     }
-    if (now - sample_1m.time >= 60 * 1000) {
-        int kbps = (int)((total_bytes - sample_1m.bytes) * 8 / (now - sample_1m.time));
-        sample_1m.update(total_bytes, now, kbps);
+    if (now - sample_1m.time > 60 * 1000) {
+        sample_1m.kbps = (int)((total_bytes - sample_1m.bytes) * 8 / (now - sample_1m.time));
+        sample_1m.time = now;
+        sample_1m.bytes = total_bytes;
     }
-    if (now - sample_5m.time >= 300 * 1000) {
-        int kbps = (int)((total_bytes - sample_5m.bytes) * 8 / (now - sample_5m.time));
-        sample_5m.update(total_bytes, now, kbps);
+    if (now - sample_5m.time > 300 * 1000) {
+        sample_5m.kbps = (int)((total_bytes - sample_5m.bytes) * 8 / (now - sample_5m.time));
+        sample_5m.time = now;
+        sample_5m.bytes = total_bytes;
     }
-    if (now - sample_60m.time >= 3600 * 1000) {
-        int kbps = (int)((total_bytes - sample_60m.bytes) * 8 / (now - sample_60m.time));
-        sample_60m.update(total_bytes, now, kbps);
+    if (now - sample_60m.time > 3600 * 1000) {
+        sample_60m.kbps = (int)((total_bytes - sample_60m.bytes) * 8 / (now - sample_60m.time));
+        sample_60m.time = now;
+        sample_60m.bytes = total_bytes;
     }
 }
 
-ISrsKbpsDelta::ISrsKbpsDelta()
+IKbpsDelta::IKbpsDelta()
 {
 }
 
-ISrsKbpsDelta::~ISrsKbpsDelta()
+IKbpsDelta::~IKbpsDelta()
 {
 }
 
-SrsWallClock::SrsWallClock()
+SrsKbps::SrsKbps()
 {
-}
-
-SrsWallClock::~SrsWallClock()
-{
-}
-
-int64_t SrsWallClock::time_ms()
-{
-    return srs_get_system_time_ms();
-}
-
-SrsKbps::SrsKbps(SrsWallClock* c) : is(c), os(c)
-{
-    clk = c;
 }
 
 SrsKbps::~SrsKbps()
@@ -130,14 +116,14 @@ void SrsKbps::set_io(ISrsProtocolStatistic* in, ISrsProtocolStatistic* out)
     // set input stream
     // now, set start time.
     if (is.starttime == 0) {
-        is.starttime = clk->time_ms();
+        is.starttime = srs_get_system_time_ms();
     }
     // save the old in bytes.
-    if (is.io) {
-        is.bytes += is.io->get_recv_bytes() - is.io_bytes_base;
+    if (is.io.in) {
+        is.bytes += is.io.in->get_recv_bytes() - is.io_bytes_base;
     }
     // use new io.
-    is.io = in;
+    is.io.in = in;
     is.last_bytes = is.io_bytes_base = 0;
     if (in) {
         is.last_bytes = is.io_bytes_base = in->get_recv_bytes();
@@ -148,14 +134,14 @@ void SrsKbps::set_io(ISrsProtocolStatistic* in, ISrsProtocolStatistic* out)
     // set output stream
     // now, set start time.
     if (os.starttime == 0) {
-        os.starttime = clk->time_ms();
+        os.starttime = srs_get_system_time_ms();
     }
     // save the old in bytes.
-    if (os.io) {
-        os.bytes += os.io->get_send_bytes() - os.io_bytes_base;
+    if (os.io.out) {
+        os.bytes += os.io.out->get_send_bytes() - os.io_bytes_base;
     }
     // use new io.
-    os.io = out;
+    os.io.out = out;
     os.last_bytes = os.io_bytes_base = 0;
     if (out) {
         os.last_bytes = os.io_bytes_base = out->get_send_bytes();
@@ -166,7 +152,7 @@ void SrsKbps::set_io(ISrsProtocolStatistic* in, ISrsProtocolStatistic* out)
 
 int SrsKbps::get_send_kbps()
 {
-    int64_t duration = clk->time_ms() - is.starttime;
+    int64_t duration = srs_get_system_time_ms() - is.starttime;
     if (duration <= 0) {
         return 0;
     }
@@ -176,7 +162,7 @@ int SrsKbps::get_send_kbps()
 
 int SrsKbps::get_recv_kbps()
 {
-    int64_t duration = clk->time_ms() - os.starttime;
+    int64_t duration = srs_get_system_time_ms() - os.starttime;
     if (duration <= 0) {
         return 0;
     }
@@ -204,31 +190,6 @@ int SrsKbps::get_recv_kbps_5m()
     return is.sample_5m.kbps;
 }
 
-void SrsKbps::add_delta(int64_t in, int64_t out)
-{
-    // update the total bytes
-    is.last_bytes += in;
-    os.last_bytes += out;
-    
-    // we donot sample, please use sample() to do resample.
-}
-
-void SrsKbps::sample()
-{
-    // update the total bytes
-    if (os.io) {
-        os.last_bytes = os.io->get_send_bytes();
-    }
-    
-    if (is.io) {
-        is.last_bytes = is.io->get_recv_bytes();
-    }
-    
-    // resample
-    is.sample();
-    os.sample();
-}
-
 int64_t SrsKbps::get_send_bytes()
 {
     // we must calc the send bytes dynamically,
@@ -239,15 +200,15 @@ int64_t SrsKbps::get_send_bytes()
     int64_t bytes = os.bytes;
     
     // When exists active session, use it to get the last bytes.
-    if (os.io) {
-        bytes += os.io->get_send_bytes() - os.io_bytes_base;
+    if (os.io.out) {
+        bytes += os.io.out->get_send_bytes() - os.io_bytes_base;
         return bytes;
     }
     
     // When no active session, the last_bytes record the last valid bytes.
     // TODO: Maybe the bellow bytes is zero, because the ios.io.out is NULL.
     bytes += os.last_bytes - os.io_bytes_base;
-    
+
     return bytes;
 }
 
@@ -261,33 +222,66 @@ int64_t SrsKbps::get_recv_bytes()
     int64_t bytes = is.bytes;
     
     // When exists active session, use it to get the last bytes.
-    if (is.io) {
-        bytes += is.io->get_recv_bytes() - is.io_bytes_base;
+    if (is.io.in) {
+        bytes += is.io.in->get_recv_bytes() - is.io_bytes_base;
         return bytes;
     }
     
     // When no active session, the last_bytes record the last valid bytes.
     // TODO: Maybe the bellow bytes is zero, because the ios.io.out is NULL.
     bytes += is.last_bytes - is.io_bytes_base;
-    
+
     return bytes;
 }
 
-void SrsKbps::remark(int64_t* in, int64_t* out)
+void SrsKbps::resample()
 {
     sample();
-    
-    int64_t inv = is.get_total_bytes() - is.delta_bytes;
-    is.delta_bytes = is.get_total_bytes();
-    if (in) {
-        *in = inv;
-    }
-    
-    int64_t outv = os.get_total_bytes() - os.delta_bytes;
+}
+
+int64_t SrsKbps::get_send_bytes_delta()
+{
+    int64_t delta = os.get_total_bytes() - os.delta_bytes;
+    return delta;
+}
+
+int64_t SrsKbps::get_recv_bytes_delta()
+{
+    int64_t delta = is.get_total_bytes() - is.delta_bytes;
+    return delta;
+}
+
+void SrsKbps::cleanup()
+{
     os.delta_bytes = os.get_total_bytes();
-    if (out) {
-        *out = outv;
+    is.delta_bytes = is.get_total_bytes();
+}
+
+void SrsKbps::add_delta(IKbpsDelta* delta)
+{
+    srs_assert(delta);
+    
+    // update the total bytes
+    is.last_bytes += delta->get_recv_bytes_delta();
+    os.last_bytes += delta->get_send_bytes_delta();
+    
+    // we donot sample, please use sample() to do resample.
+}
+
+void SrsKbps::sample()
+{
+    // update the total bytes
+    if (os.io.out) {
+        os.last_bytes = os.io.out->get_send_bytes();
     }
+    
+    if (is.io.in) {
+        is.last_bytes = is.io.in->get_recv_bytes();
+    }
+    
+    // resample
+    is.sample();
+    os.sample();
 }
 
 int SrsKbps::size_memory()

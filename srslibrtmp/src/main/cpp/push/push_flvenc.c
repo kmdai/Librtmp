@@ -219,7 +219,8 @@ int create_AVCVideoPacket(char **data, char *sps_pps, int size) {
 
 int create_VideoPacket(char **data, char *nalu, int type, int size, int time) {
     int nalu_size = size - prefix;
-    (*data) = (char *) malloc(nalu_size + 9);
+    int packet_size = nalu_size + 9;
+    (*data) = (char *) malloc(packet_size);
     char *body = *data;
     int i = 0;
     int key = nalu[prefix] & 0x1f;
@@ -246,7 +247,7 @@ int create_VideoPacket(char **data, char *nalu, int type, int size, int time) {
     memcpy(body + i, nalu + prefix, nalu_size);
     i += nalu_size;
 //    SRS_LOGE("---create_VideoPacket size=%d", i);
-    return i;
+    return packet_size;
 }
 
 

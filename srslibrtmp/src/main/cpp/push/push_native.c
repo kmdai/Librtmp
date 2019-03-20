@@ -11,11 +11,11 @@ static JavaVM *javaVM;
 jboolean setUrl(JNIEnv *env, jobject instance, jstring url) {
     const char *rtmp_url = (*env)->GetStringUTFChars(env, url, 0);
     int result = init_srs(rtmp_url);
-    if (result == 0) {
+    if (result != 0) {
         rtmp_start(javaVM);
     }
     (*env)->ReleaseStringUTFChars(env, url, rtmp_url);
-    return result != 0 ? JNI_FALSE : JNI_TRUE;
+    return result != 0 ? JNI_TRUE : JNI_FALSE;
 }
 
 void addFrame(JNIEnv *env, jobject instance, jbyteArray data, jint size, jint type, jint flag,

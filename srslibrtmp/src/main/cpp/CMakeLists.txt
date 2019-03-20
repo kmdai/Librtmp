@@ -15,6 +15,7 @@ add_library(srsPush SHARED ${push} ${media})
 
 target_include_directories(srsPush PRIVATE push media)
 target_compile_options(srsPush
-        PUBLIC
-        -Wpointer-sign)
+        PRIVATE
+        -Wpointer-sign
+        -Wreserved-user-defined-literal)
 target_link_libraries(srsPush srsrtmp mediandk oboe)

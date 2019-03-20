@@ -14,22 +14,24 @@ int init_srs(const char *url) {
     srs_rtmp = srs_rtmp_create(url);
     media_config_p = (media_config *) malloc(sizeof(media_config));
     init_queue();
-    if (srs_rtmp_handshake(srs_rtmp) != 0) {
+    int ret;
+    if ((ret = srs_rtmp_handshake(srs_rtmp)) != 0) {
+        SRS_LOGE("srs_rtmp_handshake failed.:%d", ret);
         rtmp_destroy();
-        return 1;
+        return 0;
     }
     if (srs_rtmp_connect_app(srs_rtmp) != 0) {
         SRS_LOGE("connect vhost/app failed.");
         rtmp_destroy();
-        return 1;
+        return 0;
     }
 
     if (srs_rtmp_publish_stream(srs_rtmp) != 0) {
         SRS_LOGE("publish stream failed.");
         rtmp_destroy();
-        return 1;
+        return 0;
     }
-    return 0;
+    return 1;
 }
 
 void rtmp_destroy() {

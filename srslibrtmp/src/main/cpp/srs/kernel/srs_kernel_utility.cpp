@@ -1,25 +1,25 @@
-/**
- * The MIT License (MIT)
- *
- * Copyright (c) 2013-2019 Winlin
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy of
- * this software and associated documentation files (the "Software"), to deal in
- * the Software without restriction, including without limitation the rights to
- * use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
- * the Software, and to permit persons to whom the Software is furnished to do so,
- * subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
- * FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
- * COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
- * IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- */
+/*
+The MIT License (MIT)
+
+Copyright (c) 2013-2015 SRS(ossrs)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*/
 
 #include <srs_kernel_utility.hpp>
 
@@ -34,15 +34,12 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include <stdlib.h>
 
-#include <vector>
 using namespace std;
 
-#include <srs_core_autofree.hpp>
 #include <srs_kernel_log.hpp>
 #include <srs_kernel_error.hpp>
-#include <srs_kernel_buffer.hpp>
+#include <srs_kernel_stream.hpp>
 #include <srs_kernel_flv.hpp>
 
 // this value must:
@@ -50,16 +47,16 @@ using namespace std;
 // @see SRS_SYS_TIME_RESOLUTION_MS_TIMES
 #define SYS_TIME_RESOLUTION_US 300*1000
 
-srs_error_t srs_avc_nalu_read_uev(SrsBitBuffer* stream, int32_t& v)
+int srs_avc_nalu_read_uev(SrsBitStream* stream, int32_t& v)
 {
-    srs_error_t err = srs_success;
+    int ret = ERROR_SUCCESS;
     
     if (stream->empty()) {
-        return srs_error_new(ERROR_AVC_NALU_UEV, "empty stream");
+        return ERROR_AVC_NALU_UEV;
     }
     
     // ue(v) in 9.1 Parsing process for Exp-Golomb codes
-    // ISO_IEC_14496-10-AVC-2012.pdf, page 227.
+    // H.264-AVC-ISO_IEC_14496-10-2012.pdf, page 227.
     // Syntax elements coded as ue(v), me(v), or se(v) are Exp-Golomb-coded.
     //      leadingZeroBits = -1;
     //      for( b = 0; !b; leadingZeroBits++ )
@@ -72,37 +69,33 @@ srs_error_t srs_avc_nalu_read_uev(SrsBitBuffer* stream, int32_t& v)
     }
     
     if (leadingZeroBits >= 31) {
-        return srs_error_new(ERROR_AVC_NALU_UEV, "%dbits overflow 31bits", leadingZeroBits);
+        return ERROR_AVC_NALU_UEV;
     }
     
     v = (1 << leadingZeroBits) - 1;
-    for (int i = 0; i < (int)leadingZeroBits; i++) {
-        if (stream->empty()) {
-            return srs_error_new(ERROR_AVC_NALU_UEV, "no bytes for leadingZeroBits=%d", leadingZeroBits);
-        }
-        
+    for (int i = 0; i < leadingZeroBits; i++) {
         int32_t b = stream->read_bit();
         v += b << (leadingZeroBits - 1 - i);
     }
     
-    return err;
+    return ret;
 }
 
-srs_error_t srs_avc_nalu_read_bit(SrsBitBuffer* stream, int8_t& v)
+int srs_avc_nalu_read_bit(SrsBitStream* stream, int8_t& v)
 {
-    srs_error_t err = srs_success;
+    int ret = ERROR_SUCCESS;
     
     if (stream->empty()) {
-        return srs_error_new(ERROR_AVC_NALU_UEV, "empty stream");
+        return ERROR_AVC_NALU_UEV;
     }
     
     v = stream->read_bit();
     
-    return err;
+    return ret;
 }
 
-int64_t _srs_system_time_us_cache = 0;
-int64_t _srs_system_time_startup_time = 0;
+static int64_t _srs_system_time_us_cache = 0;
+static int64_t _srs_system_time_startup_time = 0;
 
 int64_t srs_get_system_time_ms()
 {
@@ -112,7 +105,6 @@ int64_t srs_get_system_time_ms()
     
     return _srs_system_time_us_cache / 1000;
 }
-
 int64_t srs_get_system_startup_time_ms()
 {
     if (_srs_system_time_startup_time <= 0) {
@@ -121,7 +113,6 @@ int64_t srs_get_system_startup_time_ms()
     
     return _srs_system_time_startup_time / 1000;
 }
-
 int64_t srs_update_system_time_ms()
 {
     timeval now;
@@ -130,7 +121,7 @@ int64_t srs_update_system_time_ms()
         srs_warn("gettimeofday failed, ignore");
         return -1;
     }
-    
+
     // @see: https://github.com/ossrs/srs/issues/35
     // we must convert the tv_sec/tv_usec to int64_t.
     int64_t now_us = ((int64_t)now.tv_sec) * 1000 * 1000 + (int64_t)now.tv_usec;
@@ -142,7 +133,8 @@ int64_t srs_update_system_time_ms()
     // use date +%s to get system time is 1403844851.
     // so we use relative time.
     if (_srs_system_time_us_cache <= 0) {
-        _srs_system_time_startup_time = _srs_system_time_us_cache = now_us;
+        _srs_system_time_us_cache = now_us;
+        _srs_system_time_startup_time = now_us;
         return _srs_system_time_us_cache / 1000;
     }
     
@@ -150,120 +142,43 @@ int64_t srs_update_system_time_ms()
     int64_t diff = now_us - _srs_system_time_us_cache;
     diff = srs_max(0, diff);
     if (diff < 0 || diff > 1000 * SYS_TIME_RESOLUTION_US) {
-        srs_warn("clock jump, history=%" PRId64 "us, now=%" PRId64 "us, diff=%" PRId64 "us", _srs_system_time_us_cache, now_us, diff);
+        srs_warn("system time jump, history=%"PRId64"us, now=%"PRId64"us, diff=%"PRId64"us", 
+            _srs_system_time_us_cache, now_us, diff);
         // @see: https://github.com/ossrs/srs/issues/109
         _srs_system_time_startup_time += diff;
     }
     
     _srs_system_time_us_cache = now_us;
-    srs_info("clock updated, startup=%" PRId64 "us, now=%" PRId64 "us", _srs_system_time_startup_time, _srs_system_time_us_cache);
+    srs_info("system time updated, startup=%"PRId64"us, now=%"PRId64"us", 
+        _srs_system_time_startup_time, _srs_system_time_us_cache);
     
     return _srs_system_time_us_cache / 1000;
 }
 
-string srs_dns_resolve(string host, int& family)
+string srs_dns_resolve(string host)
 {
-    addrinfo hints;
-    memset(&hints, 0, sizeof(hints));
-    hints.ai_family  = family;
+    if (inet_addr(host.c_str()) != INADDR_NONE) {
+        return host;
+    }
     
-    addrinfo* r = NULL;
-    SrsAutoFree(addrinfo, r);
-    
-    if(getaddrinfo(host.c_str(), NULL, NULL, &r)) {
+    hostent* answer = gethostbyname(host.c_str());
+    if (answer == NULL) {
         return "";
     }
     
-    char saddr[64];
-    char* h = (char*)saddr;
-    socklen_t nbh = sizeof(saddr);
-    const int r0 = getnameinfo(r->ai_addr, r->ai_addrlen, h, nbh, NULL, 0, NI_NUMERICHOST);
-
-    if(!r0) {
-       family = r->ai_family;
-       return string(saddr);
-    }
-    return "";
-}
-
-void srs_parse_hostport(const string& hostport, string& host, int& port)
-{
-    const size_t pos = hostport.rfind(":");   // Look for ":" from the end, to work with IPv6.
-    if (pos != std::string::npos) {
-        const string p = hostport.substr(pos + 1);
-        if ((pos >= 1) &&
-            (hostport[0]       == '[') &&
-            (hostport[pos - 1] == ']')) {
-            // Handle IPv6 in RFC 2732 format, e.g. [3ffe:dead:beef::1]:1935
-            host = hostport.substr(1, pos - 2);
-        } else {
-            // Handle IP address
-            host = hostport.substr(0, pos);
-        }
-        port = ::atoi(p.c_str());
-    } else {
-        host = hostport;
-    }
-}
-
-string srs_any_address4listener()
-{
-    int fd = socket(AF_INET6, SOCK_DGRAM, 0);
-    
-    // socket()
-    // A -1 is returned if an error occurs, otherwise the return value is a
-    // descriptor referencing the socket.
-    if(fd != -1) {
-        close(fd);
-        return "::";
+    char ipv4[16];
+    memset(ipv4, 0, sizeof(ipv4));
+    for (int i = 0; i < answer->h_length; i++) {
+        inet_ntop(AF_INET, answer->h_addr_list[i], ipv4, sizeof(ipv4));
+        break;
     }
     
-    return "0.0.0.0";
-}
-
-void srs_parse_endpoint(string hostport, string& ip, int& port)
-{
-    const size_t pos = hostport.rfind(":");   // Look for ":" from the end, to work with IPv6.
-    if (pos != std::string::npos) {
-        if ((pos >= 1) && (hostport[0] == '[') && (hostport[pos - 1] == ']')) {
-            // Handle IPv6 in RFC 2732 format, e.g. [3ffe:dead:beef::1]:1935
-            ip = hostport.substr(1, pos - 2);
-        } else {
-            // Handle IP address
-            ip = hostport.substr(0, pos);
-        }
-        
-        const string sport = hostport.substr(pos + 1);
-        port = ::atoi(sport.c_str());
-    } else {
-        ip   = srs_any_address4listener();
-        port = ::atoi(hostport.c_str());
-    }
-}
-
-string srs_int2str(int64_t value)
-{
-    // len(max int64_t) is 20, plus one "+-."
-    char tmp[22];
-    snprintf(tmp, 22, "%" PRId64, value);
-    return tmp;
-}
-
-string srs_float2str(double value)
-{
-    // len(max int64_t) is 20, plus one "+-."
-    char tmp[22];
-    snprintf(tmp, 22, "%.2f", value);
-    return tmp;
-}
-
-string srs_bool2switch(bool v) {
-    return v? "on" : "off";
+    return ipv4;
 }
 
 bool srs_is_little_endian()
 {
-    // convert to network(big-endian) order, if not equals,
+    // convert to network(big-endian) order, if not equals, 
     // the system is little-endian, so need to convert the int64
     static int little_endian_check = -1;
     
@@ -360,10 +275,10 @@ string srs_erase_first_substr(string str, string erase_string)
 
 	size_t pos = ret.find(erase_string);
 
-	if (pos != std::string::npos) {
+	if (pos != std::string::npos)
+	{
 		ret.erase(pos, erase_string.length());
 	}
-    
 	return ret;
 }
 
@@ -373,32 +288,16 @@ string srs_erase_last_substr(string str, string erase_string)
 
 	size_t pos = ret.rfind(erase_string);
 
-	if (pos != std::string::npos) {
+	if (pos != std::string::npos)
+	{
 		ret.erase(pos, erase_string.length());
 	}
-    
 	return ret;
 }
 
 bool srs_string_ends_with(string str, string flag)
 {
-    const size_t pos = str.rfind(flag);
-    return (pos != string::npos) && (pos == str.length() - flag.length());
-}
-
-bool srs_string_ends_with(string str, string flag0, string flag1)
-{
-    return srs_string_ends_with(str, flag0) || srs_string_ends_with(str, flag1);
-}
-
-bool srs_string_ends_with(string str, string flag0, string flag1, string flag2)
-{
-    return srs_string_ends_with(str, flag0) || srs_string_ends_with(str, flag1) || srs_string_ends_with(str, flag2);
-}
-
-bool srs_string_ends_with(string str, string flag0, string flag1, string flag2, string flag3)
-{
-    return srs_string_ends_with(str, flag0) || srs_string_ends_with(str, flag1) || srs_string_ends_with(str, flag2) || srs_string_ends_with(str, flag3);
+    return str.rfind(flag) == str.length() - flag.length();
 }
 
 bool srs_string_starts_with(string str, string flag)
@@ -409,16 +308,6 @@ bool srs_string_starts_with(string str, string flag)
 bool srs_string_starts_with(string str, string flag0, string flag1)
 {
     return srs_string_starts_with(str, flag0) || srs_string_starts_with(str, flag1);
-}
-
-bool srs_string_starts_with(string str, string flag0, string flag1, string flag2)
-{
-    return srs_string_starts_with(str, flag0, flag1) || srs_string_starts_with(str, flag2);
-}
-
-bool srs_string_starts_with(string str, string flag0, string flag1, string flag2, string flag3)
-{
-    return srs_string_starts_with(str, flag0, flag1, flag2) || srs_string_starts_with(str, flag3);
 }
 
 bool srs_string_contains(string str, string flag)
@@ -434,88 +323,6 @@ bool srs_string_contains(string str, string flag0, string flag1)
 bool srs_string_contains(string str, string flag0, string flag1, string flag2)
 {
     return str.find(flag0) != string::npos || str.find(flag1) != string::npos || str.find(flag2) != string::npos;
-}
-
-vector<string> srs_string_split(string str, string flag)
-{
-    vector<string> arr;
-    
-    if (flag.empty()) {
-        arr.push_back(str);
-        return arr;
-    }
-    
-    size_t pos;
-    string s = str;
-    
-    while ((pos = s.find(flag)) != string::npos) {
-        if (pos != 0) {
-            arr.push_back(s.substr(0, pos));
-        }
-        s = s.substr(pos + flag.length());
-    }
-    
-    if (!s.empty()) {
-        arr.push_back(s);
-    }
-    
-    return arr;
-}
-
-string srs_string_min_match(string str, vector<string> flags)
-{
-    string match;
-    
-    if (flags.empty()) {
-        return str;
-    }
-    
-    size_t min_pos = string::npos;
-    for (vector<string>::iterator it = flags.begin(); it != flags.end(); ++it) {
-        string flag = *it;
-        
-        size_t pos = str.find(flag);
-        if (pos == string::npos) {
-            continue;
-        }
-        
-        if (min_pos == string::npos || pos < min_pos) {
-            min_pos = pos;
-            match = flag;
-        }
-    }
-    
-    return match;
-}
-
-vector<string> srs_string_split(string str, vector<string> flags)
-{
-    vector<string> arr;
-    
-    size_t pos = string::npos;
-    string s = str;
-    
-    while (true) {
-        string flag = srs_string_min_match(s, flags);
-        if (flag.empty()) {
-            break;
-        }
-        
-        if ((pos = s.find(flag)) == string::npos) {
-            break;
-        }
-        
-        if (pos != 0) {
-            arr.push_back(s.substr(0, pos));
-        }
-        s = s.substr(pos + flag.length());
-    }
-    
-    if (!s.empty()) {
-        arr.push_back(s);
-    }
-    
-    return arr;
 }
 
 int srs_do_create_dir_recursively(string dir)
@@ -556,43 +363,22 @@ int srs_do_create_dir_recursively(string dir)
         srs_error("create dir %s failed. ret=%d", dir.c_str(), ret);
         return ret;
     }
-    
     srs_info("create dir %s success.", dir.c_str());
     
     return ret;
 }
-    
-bool srs_bytes_equals(void* pa, void* pb, int size)
-{
-    uint8_t* a = (uint8_t*)pa;
-    uint8_t* b = (uint8_t*)pb;
-    
-    if (!a && !b) {
-        return true;
-    }
-    
-    if (!a || !b) {
-        return false;
-    }
-    
-    for(int i = 0; i < size; i++){
-        if(a[i] != b[i]){
-            return false;
-        }
-    }
-    
-    return true;
-}
 
-srs_error_t srs_create_dir_recursively(string dir)
+int srs_create_dir_recursively(string dir)
 {
-    int ret = srs_do_create_dir_recursively(dir);
+    int ret = ERROR_SUCCESS;
     
-    if (ret == ERROR_SYSTEM_DIR_EXISTS || ret == ERROR_SUCCESS) {
-        return srs_success;
+    ret = srs_do_create_dir_recursively(dir);
+    
+    if (ret == ERROR_SYSTEM_DIR_EXISTS) {
+        return ERROR_SUCCESS;
     }
     
-    return srs_error_new(ret, "create dir %s", dir.c_str());
+    return ret;
 }
 
 bool srs_path_exists(std::string path)
@@ -603,7 +389,7 @@ bool srs_path_exists(std::string path)
     if (stat(path.c_str(), &st) == 0) {
         return true;
     }
-    
+
     return false;
 }
 
@@ -638,40 +424,13 @@ string srs_path_basename(string path)
     return dirname;
 }
 
-string srs_path_filename(string path)
+bool srs_avc_startswith_annexb(SrsStream* stream, int* pnb_start_code)
 {
-    std::string filename = path;
-    size_t pos = string::npos;
-    
-    if ((pos = filename.rfind(".")) != string::npos) {
-        return filename.substr(0, pos);
-    }
-    
-    return filename;
-}
-
-string srs_path_filext(string path)
-{
-    size_t pos = string::npos;
-    
-    if ((pos = path.rfind(".")) != string::npos) {
-        return path.substr(pos);
-    }
-    
-    return "";
-}
-
-bool srs_avc_startswith_annexb(SrsBuffer* stream, int* pnb_start_code)
-{
-    if (!stream) {
-        return false;
-    }
-    
     char* bytes = stream->data() + stream->pos();
     char* p = bytes;
     
     for (;;) {
-        if (!stream->require((int)(p - bytes + 3))) {
+        if (!stream->require(p - bytes + 3)) {
             return false;
         }
         
@@ -694,12 +453,8 @@ bool srs_avc_startswith_annexb(SrsBuffer* stream, int* pnb_start_code)
     return false;
 }
 
-bool srs_aac_startswith_adts(SrsBuffer* stream)
+bool srs_aac_startswith_adts(SrsStream* stream)
 {
-    if (!stream) {
-        return false;
-    }
-    
     char* bytes = stream->data() + stream->pos();
     char* p = bytes;
     
@@ -715,276 +470,302 @@ bool srs_aac_startswith_adts(SrsBuffer* stream)
     
     return true;
 }
-    
-// @see pycrc reflect at https://github.com/winlinvip/pycrc/blob/master/pycrc/algorithms.py#L107
-uint64_t __crc32_reflect(uint64_t data, int width)
-{
-    uint64_t res = data & 0x01;
-    
-    for (int i = 0; i < (int)width - 1; i++) {
-        data >>= 1;
-        res = (res << 1) | (data & 0x01);
-    }
-    
-    return res;
-}
-    
-// @see pycrc gen_table at https://github.com/winlinvip/pycrc/blob/master/pycrc/algorithms.py#L178
-void __crc32_make_table(uint32_t t[256], uint32_t poly, bool reflect_in)
-{
-    int width = 32; // 32bits checksum.
-    uint64_t msb_mask = (uint32_t)(0x01 << (width - 1));
-    uint64_t mask = (uint32_t)(((msb_mask - 1) << 1) | 1);
-    
-    int tbl_idx_width = 8; // table index size.
-    int tbl_width = 0x01 << tbl_idx_width; // table size: 256
-    
-    for (int i = 0; i < (int)tbl_width; i++) {
-        uint64_t reg = uint64_t(i);
-        
-        if (reflect_in) {
-            reg = __crc32_reflect(reg, tbl_idx_width);
-        }
-        
-        reg = reg << (width - tbl_idx_width);
-        for (int j = 0; j < tbl_idx_width; j++) {
-            if ((reg&msb_mask) != 0) {
-                reg = (reg << 1) ^ poly;
-            } else {
-                reg = reg << 1;
-            }
-        }
-        
-        if (reflect_in) {
-            reg = __crc32_reflect(reg, width);
-        }
-        
-        t[i] = (uint32_t)(reg & mask);
-    }
-}
- 
-// @see pycrc table_driven at https://github.com/winlinvip/pycrc/blob/master/pycrc/algorithms.py#L207
-uint32_t __crc32_table_driven(uint32_t* t, const void* buf, int size, uint32_t previous, bool reflect_in, uint32_t xor_in, bool reflect_out, uint32_t xor_out)
-{
-    int width = 32; // 32bits checksum.
-    uint64_t msb_mask = (uint32_t)(0x01 << (width - 1));
-    uint64_t mask = (uint32_t)(((msb_mask - 1) << 1) | 1);
-    
-    int tbl_idx_width = 8; // table index size.
-    
-    uint8_t* p = (uint8_t*)buf;
-    uint64_t reg = 0;
-    
-    if (!reflect_in) {
-        reg = xor_in;
-        
-        for (int i = 0; i < (int)size; i++) {
-            uint8_t tblidx = (uint8_t)((reg >> (width - tbl_idx_width)) ^ p[i]);
-            reg = t[tblidx] ^ (reg << tbl_idx_width);
-        }
-    } else {
-        reg = previous ^ __crc32_reflect(xor_in, width);
-        
-        for (int i = 0; i < (int)size; i++) {
-            uint8_t tblidx = (uint8_t)(reg ^ p[i]);
-            reg = t[tblidx] ^ (reg >> tbl_idx_width);
-        }
-        
-        reg = __crc32_reflect(reg, width);
-    }
-    
-    if (reflect_out) {
-        reg = __crc32_reflect(reg, width);
-    }
-    
-    reg ^= xor_out;
-    return (uint32_t)(reg & mask);
-}
-    
-// @see pycrc https://github.com/winlinvip/pycrc/blob/master/pycrc/algorithms.py#L207
-// IEEETable is the table for the IEEE polynomial.
-static uint32_t __crc32_IEEE_table[256];
-static bool __crc32_IEEE_table_initialized = false;
 
-// @see pycrc https://github.com/winlinvip/pycrc/blob/master/pycrc/models.py#L220
-//      crc32('123456789') = 0xcbf43926
-// where it's defined as model:
-//      'name':         'crc-32',
-//      'width':         32,
-//      'poly':          0x4c11db7,
-//      'reflect_in':    True,
-//      'xor_in':        0xffffffff,
-//      'reflect_out':   True,
-//      'xor_out':       0xffffffff,
-//      'check':         0xcbf43926,
-uint32_t srs_crc32_ieee(const void* buf, int size, uint32_t previous)
-{
-    // @see golang IEEE of hash/crc32/crc32.go
-    // IEEE is by far and away the most common CRC-32 polynomial.
-    // Used by ethernet (IEEE 802.3), v.42, fddi, gzip, zip, png, ...
-    // @remark The poly of CRC32 IEEE is 0x04C11DB7, its reverse is 0xEDB88320,
-    //      please read https://en.wikipedia.org/wiki/Cyclic_redundancy_check
-    uint32_t poly = 0x04C11DB7;
-    
-    bool reflect_in = true;
-    uint32_t xor_in = 0xffffffff;
-    bool reflect_out = true;
-    uint32_t xor_out = 0xffffffff;
-    
-    if (!__crc32_IEEE_table_initialized) {
-        __crc32_make_table(__crc32_IEEE_table, poly, reflect_in);
-        __crc32_IEEE_table_initialized = true;
-    }
-    
-    return __crc32_table_driven(__crc32_IEEE_table, buf, size, previous, reflect_in, xor_in, reflect_out, xor_out);
-}
-    
-// @see pycrc https://github.com/winlinvip/pycrc/blob/master/pycrc/algorithms.py#L238
-// IEEETable is the table for the MPEG polynomial.
-static uint32_t __crc32_MPEG_table[256];
-static bool __crc32_MPEG_table_initialized = false;
+/*
+ * MPEG2 transport stream (aka DVB) mux
+ * Copyright (c) 2003 Fabrice Bellard.
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 2 of the License, or (at your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this library; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ */
+static const u_int32_t crc_table[256] = {
+	0x00000000, 0x04c11db7, 0x09823b6e, 0x0d4326d9, 0x130476dc, 0x17c56b6b,
+	0x1a864db2, 0x1e475005, 0x2608edb8, 0x22c9f00f, 0x2f8ad6d6, 0x2b4bcb61,
+	0x350c9b64, 0x31cd86d3, 0x3c8ea00a, 0x384fbdbd, 0x4c11db70, 0x48d0c6c7,
+	0x4593e01e, 0x4152fda9, 0x5f15adac, 0x5bd4b01b, 0x569796c2, 0x52568b75,
+	0x6a1936c8, 0x6ed82b7f, 0x639b0da6, 0x675a1011, 0x791d4014, 0x7ddc5da3,
+	0x709f7b7a, 0x745e66cd, 0x9823b6e0, 0x9ce2ab57, 0x91a18d8e, 0x95609039,
+	0x8b27c03c, 0x8fe6dd8b, 0x82a5fb52, 0x8664e6e5, 0xbe2b5b58, 0xbaea46ef,
+	0xb7a96036, 0xb3687d81, 0xad2f2d84, 0xa9ee3033, 0xa4ad16ea, 0xa06c0b5d,
+	0xd4326d90, 0xd0f37027, 0xddb056fe, 0xd9714b49, 0xc7361b4c, 0xc3f706fb,
+	0xceb42022, 0xca753d95, 0xf23a8028, 0xf6fb9d9f, 0xfbb8bb46, 0xff79a6f1,
+	0xe13ef6f4, 0xe5ffeb43, 0xe8bccd9a, 0xec7dd02d, 0x34867077, 0x30476dc0,
+	0x3d044b19, 0x39c556ae, 0x278206ab, 0x23431b1c, 0x2e003dc5, 0x2ac12072,
+	0x128e9dcf, 0x164f8078, 0x1b0ca6a1, 0x1fcdbb16, 0x018aeb13, 0x054bf6a4,
+	0x0808d07d, 0x0cc9cdca, 0x7897ab07, 0x7c56b6b0, 0x71159069, 0x75d48dde,
+	0x6b93dddb, 0x6f52c06c, 0x6211e6b5, 0x66d0fb02, 0x5e9f46bf, 0x5a5e5b08,
+	0x571d7dd1, 0x53dc6066, 0x4d9b3063, 0x495a2dd4, 0x44190b0d, 0x40d816ba,
+	0xaca5c697, 0xa864db20, 0xa527fdf9, 0xa1e6e04e, 0xbfa1b04b, 0xbb60adfc,
+	0xb6238b25, 0xb2e29692, 0x8aad2b2f, 0x8e6c3698, 0x832f1041, 0x87ee0df6,
+	0x99a95df3, 0x9d684044, 0x902b669d, 0x94ea7b2a, 0xe0b41de7, 0xe4750050,
+	0xe9362689, 0xedf73b3e, 0xf3b06b3b, 0xf771768c, 0xfa325055, 0xfef34de2,
+	0xc6bcf05f, 0xc27dede8, 0xcf3ecb31, 0xcbffd686, 0xd5b88683, 0xd1799b34,
+	0xdc3abded, 0xd8fba05a, 0x690ce0ee, 0x6dcdfd59, 0x608edb80, 0x644fc637,
+	0x7a089632, 0x7ec98b85, 0x738aad5c, 0x774bb0eb, 0x4f040d56, 0x4bc510e1,
+	0x46863638, 0x42472b8f, 0x5c007b8a, 0x58c1663d, 0x558240e4, 0x51435d53,
+	0x251d3b9e, 0x21dc2629, 0x2c9f00f0, 0x285e1d47, 0x36194d42, 0x32d850f5,
+	0x3f9b762c, 0x3b5a6b9b, 0x0315d626, 0x07d4cb91, 0x0a97ed48, 0x0e56f0ff,
+	0x1011a0fa, 0x14d0bd4d, 0x19939b94, 0x1d528623, 0xf12f560e, 0xf5ee4bb9,
+	0xf8ad6d60, 0xfc6c70d7, 0xe22b20d2, 0xe6ea3d65, 0xeba91bbc, 0xef68060b,
+	0xd727bbb6, 0xd3e6a601, 0xdea580d8, 0xda649d6f, 0xc423cd6a, 0xc0e2d0dd,
+	0xcda1f604, 0xc960ebb3, 0xbd3e8d7e, 0xb9ff90c9, 0xb4bcb610, 0xb07daba7,
+	0xae3afba2, 0xaafbe615, 0xa7b8c0cc, 0xa379dd7b, 0x9b3660c6, 0x9ff77d71,
+	0x92b45ba8, 0x9675461f, 0x8832161a, 0x8cf30bad, 0x81b02d74, 0x857130c3,
+	0x5d8a9099, 0x594b8d2e, 0x5408abf7, 0x50c9b640, 0x4e8ee645, 0x4a4ffbf2,
+	0x470cdd2b, 0x43cdc09c, 0x7b827d21, 0x7f436096, 0x7200464f, 0x76c15bf8,
+	0x68860bfd, 0x6c47164a, 0x61043093, 0x65c52d24, 0x119b4be9, 0x155a565e,
+	0x18197087, 0x1cd86d30, 0x029f3d35, 0x065e2082, 0x0b1d065b, 0x0fdc1bec,
+	0x3793a651, 0x3352bbe6, 0x3e119d3f, 0x3ad08088, 0x2497d08d, 0x2056cd3a,
+	0x2d15ebe3, 0x29d4f654, 0xc5a92679, 0xc1683bce, 0xcc2b1d17, 0xc8ea00a0,
+	0xd6ad50a5, 0xd26c4d12, 0xdf2f6bcb, 0xdbee767c, 0xe3a1cbc1, 0xe760d676,
+	0xea23f0af, 0xeee2ed18, 0xf0a5bd1d, 0xf464a0aa, 0xf9278673, 0xfde69bc4,
+	0x89b8fd09, 0x8d79e0be, 0x803ac667, 0x84fbdbd0, 0x9abc8bd5, 0x9e7d9662,
+	0x933eb0bb, 0x97ffad0c, 0xafb010b1, 0xab710d06, 0xa6322bdf, 0xa2f33668,
+	0xbcb4666d, 0xb8757bda, 0xb5365d03, 0xb1f740b4
+};
 
-// @see pycrc https://github.com/winlinvip/pycrc/blob/master/pycrc/models.py#L238
-//      crc32('123456789') = 0x0376e6e7
-// where it's defined as model:
-//      'name':         'crc-32',
-//      'width':         32,
-//      'poly':          0x4c11db7,
-//      'reflect_in':    False,
-//      'xor_in':        0xffffffff,
-//      'reflect_out':   False,
-//      'xor_out':       0x0,
-//      'check':         0x0376e6e7,
-uint32_t srs_crc32_mpegts(const void* buf, int size)
+// @see http://www.stmc.edu.hk/~vincent/ffmpeg_0.4.9-pre1/libavformat/mpegtsenc.c
+unsigned int mpegts_crc32(const u_int8_t *data, int len)
 {
-    // @see golang IEEE of hash/crc32/crc32.go
-    // IEEE is by far and away the most common CRC-32 polynomial.
-    // Used by ethernet (IEEE 802.3), v.42, fddi, gzip, zip, png, ...
-    // @remark The poly of CRC32 IEEE is 0x04C11DB7, its reverse is 0xEDB88320,
-    //      please read https://en.wikipedia.org/wiki/Cyclic_redundancy_check
-    uint32_t poly = 0x04C11DB7;
+    register int i;
+    unsigned int crc = 0xffffffff;
     
-    bool reflect_in = false;
-    uint32_t xor_in = 0xffffffff;
-    bool reflect_out = false;
-    uint32_t xor_out = 0x0;
+    for (i=0; i<len; i++)
+        crc = (crc << 8) ^ crc_table[((crc >> 24) ^ *data++) & 0xff];
     
-    if (!__crc32_MPEG_table_initialized) {
-        __crc32_make_table(__crc32_MPEG_table, poly, reflect_in);
-        __crc32_MPEG_table_initialized = true;
-    }
-    
-    return __crc32_table_driven(__crc32_MPEG_table, buf, size, 0x00, reflect_in, xor_in, reflect_out, xor_out);
+    return crc;
 }
 
-// @see golang encoding/base64/base64.go
-srs_error_t srs_av_base64_decode(string cipher, string& plaintext)
+u_int32_t srs_crc32(const void* buf, int size)
 {
-    srs_error_t err = srs_success;
-    
-    // We use the standard encoding:
-    //      var StdEncoding = NewEncoding(encodeStd)
-    // StdEncoding is the standard base64 encoding, as defined in RFC 4648.
-    char padding = '=';
-    string encoder = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    
-    uint8_t decodeMap[256];
-    memset(decodeMap, 0xff, sizeof(decodeMap));
-    
-    for (int i = 0; i < (int)encoder.length(); i++) {
-        decodeMap[(uint8_t)encoder.at(i)] = uint8_t(i);
+    return mpegts_crc32((const u_int8_t*)buf, size);
+}
+
+/*
+ * Copyright (c) 2006 Ryan Martell. (rdm4@martellventures.com)
+ *
+ * This file is part of FFmpeg.
+ *
+ * FFmpeg is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 2.1 of the License, or (at your option) any later version.
+ *
+ * FFmpeg is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with FFmpeg; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
+ */
+
+#ifndef UINT_MAX
+#define UINT_MAX 0xffffffff
+#endif
+
+#ifndef AV_RB32
+#   define AV_RB32(x)                                \
+    (((uint32_t)((const u_int8_t*)(x))[0] << 24) |    \
+               (((const u_int8_t*)(x))[1] << 16) |    \
+               (((const u_int8_t*)(x))[2] <<  8) |    \
+                ((const u_int8_t*)(x))[3])
+#endif
+
+#ifndef AV_WL32
+#   define AV_WL32(p, darg) do {                \
+        unsigned d = (darg);                    \
+        ((u_int8_t*)(p))[0] = (d);               \
+        ((u_int8_t*)(p))[1] = (d)>>8;            \
+        ((u_int8_t*)(p))[2] = (d)>>16;           \
+        ((u_int8_t*)(p))[3] = (d)>>24;           \
+    } while(0)
+#endif
+
+#   define AV_WN(s, p, v) AV_WL##s(p, v)
+
+#   if    defined(AV_WN32) && !defined(AV_WL32)
+#       define AV_WL32(p, v) AV_WN32(p, v)
+#   elif !defined(AV_WN32) &&  defined(AV_WL32)
+#       define AV_WN32(p, v) AV_WL32(p, v)
+#   endif
+
+#ifndef AV_WN32
+#   define AV_WN32(p, v) AV_WN(32, p, v)
+#endif
+
+#define AV_BSWAP16C(x) (((x) << 8 & 0xff00)  | ((x) >> 8 & 0x00ff))
+#define AV_BSWAP32C(x) (AV_BSWAP16C(x) << 16 | AV_BSWAP16C((x) >> 16))
+
+#ifndef av_bswap32
+static const u_int32_t av_bswap32(u_int32_t x)
+{
+    return AV_BSWAP32C(x);
+}
+#endif
+
+#define av_be2ne32(x) av_bswap32(x)
+
+/**
+ * @file
+ * @brief Base64 encode/decode
+ * @author Ryan Martell <rdm4@martellventures.com> (with lots of Michael)
+ */
+
+/* ---------------- private code */
+static const u_int8_t map2[256] =
+{
+    0xfe, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff,
+
+    0x3e, 0xff, 0xff, 0xff, 0x3f, 0x34, 0x35, 0x36,
+    0x37, 0x38, 0x39, 0x3a, 0x3b, 0x3c, 0x3d, 0xff,
+    0xff, 0xff, 0xfe, 0xff, 0xff, 0xff, 0x00, 0x01,
+    0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09,
+    0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0x11,
+    0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x1a, 0x1b,
+    0x1c, 0x1d, 0x1e, 0x1f, 0x20, 0x21, 0x22, 0x23,
+    0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2a, 0x2b,
+    0x2c, 0x2d, 0x2e, 0x2f, 0x30, 0x31, 0x32, 0x33,
+
+                      0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+};
+
+#define BASE64_DEC_STEP(i) do { \
+    bits = map2[in[i]]; \
+    if (bits & 0x80) \
+        goto out ## i; \
+    v = i ? (v << 6) + bits : bits; \
+} while(0)
+
+int srs_av_base64_decode(u_int8_t* out, const char* in_str, int out_size)
+{
+    u_int8_t *dst = out;
+    u_int8_t *end = out + out_size;
+    // no sign extension
+    const u_int8_t *in = (const u_int8_t*)in_str;
+    unsigned bits = 0xff;
+    unsigned v = 0;
+
+    while (end - dst > 3) {
+        BASE64_DEC_STEP(0);
+        BASE64_DEC_STEP(1);
+        BASE64_DEC_STEP(2);
+        BASE64_DEC_STEP(3);
+        // Using AV_WB32 directly confuses compiler
+        v = av_be2ne32(v << 8);
+        AV_WN32(dst, v);
+        dst += 3;
+        in += 4;
     }
-    
-    // decode is like Decode but returns an additional 'end' value, which
-    // indicates if end-of-message padding or a partial quantum was encountered
-    // and thus any additional data is an error.
-    int si = 0;
-    
-    // skip over newlines
-    for (; si < (int)cipher.length() && (cipher.at(si) == '\n' || cipher.at(si) == '\r'); si++) {
+    if (end - dst) {
+        BASE64_DEC_STEP(0);
+        BASE64_DEC_STEP(1);
+        BASE64_DEC_STEP(2);
+        BASE64_DEC_STEP(3);
+        *dst++ = v >> 16;
+        if (end - dst)
+            *dst++ = v >> 8;
+        if (end - dst)
+            *dst++ = v;
+        in += 4;
     }
-    
-    for (bool end = false; si < (int)cipher.length() && !end;) {
-        // Decode quantum using the base64 alphabet
-        uint8_t dbuf[4];
-        memset(dbuf, 0x00, sizeof(dbuf));
-        
-        int dinc = 3;
-        int dlen = 4;
-        srs_assert(dinc > 0);
-        
-        for (int j = 0; j < (int)sizeof(dbuf); j++) {
-            if (si == (int)cipher.length()) {
-                if (padding != -1 || j < 2) {
-                    return srs_error_new(ERROR_BASE64_DECODE, "corrupt input at %d", si);
-                }
-                
-                dinc = j - 1;
-                dlen = j;
-                end = true;
-                break;
-            }
-            
-            char in = cipher.at(si);
-            
-            si++;
-            // skip over newlines
-            for (; si < (int)cipher.length() && (cipher.at(si) == '\n' || cipher.at(si) == '\r'); si++) {
-            }
-            
-            if (in == padding) {
-                // We've reached the end and there's padding
-                switch (j) {
-                    case 0:
-                    case 1:
-                        // incorrect padding
-                        return srs_error_new(ERROR_BASE64_DECODE, "corrupt input at %d", si);
-                    case 2:
-                        // "==" is expected, the first "=" is already consumed.
-                        if (si == (int)cipher.length()) {
-                            return srs_error_new(ERROR_BASE64_DECODE, "corrupt input at %d", si);
-                        }
-                        if (cipher.at(si) != padding) {
-                            // incorrect padding
-                            return srs_error_new(ERROR_BASE64_DECODE, "corrupt input at %d", si);
-                        }
-                        
-                        si++;
-                        // skip over newlines
-                        for (; si < (int)cipher.length() && (cipher.at(si) == '\n' || cipher.at(si) == '\r'); si++) {
-                        }
-                }
-                
-                if (si < (int)cipher.length()) {
-                    // trailing garbage
-                    err = srs_error_new(ERROR_BASE64_DECODE, "corrupt input at %d", si);
-                }
-                dinc = 3;
-                dlen = j;
-                end = true;
-                break;
-            }
-            
-            dbuf[j] = decodeMap[(uint8_t)in];
-            if (dbuf[j] == 0xff) {
-                return srs_error_new(ERROR_BASE64_DECODE, "corrupt input at %d", si);
-            }
-        }
-        
-        // Convert 4x 6bit source bytes into 3 bytes
-        uint32_t val = uint32_t(dbuf[0])<<18 | uint32_t(dbuf[1])<<12 | uint32_t(dbuf[2])<<6 | uint32_t(dbuf[3]);
-        if (dlen >= 2) {
-            plaintext.append(1, char(val >> 16));
-        }
-        if (dlen >= 3) {
-            plaintext.append(1, char(val >> 8));
-        }
-        if (dlen >= 4) {
-            plaintext.append(1, char(val));
-        }
+    while (1) {
+        BASE64_DEC_STEP(0);
+        in++;
+        BASE64_DEC_STEP(0);
+        in++;
+        BASE64_DEC_STEP(0);
+        in++;
+        BASE64_DEC_STEP(0);
+        in++;
     }
-    
-    return err;
+
+out3:
+    *dst++ = v >> 10;
+    v <<= 2;
+out2:
+    *dst++ = v >> 4;
+out1:
+out0:
+    return bits & 1 ? -1 : dst - out;
+}
+
+/*****************************************************************************
+* b64_encode: Stolen from VLC's http.c.
+* Simplified by Michael.
+* Fixed edge cases and made it work from data (vs. strings) by Ryan.
+*****************************************************************************/
+
+char* srs_av_base64_encode(char* out, int out_size, const u_int8_t* in, int in_size)
+{
+    static const char b64[] =
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    char *ret, *dst;
+    unsigned i_bits = 0;
+    int i_shift = 0;
+    int bytes_remaining = in_size;
+
+    if (in_size >= (int)(UINT_MAX / 4) ||
+        out_size < SRS_AV_BASE64_SIZE(in_size))
+        return NULL;
+    ret = dst = out;
+    while (bytes_remaining > 3) {
+        i_bits = AV_RB32(in);
+        in += 3; bytes_remaining -= 3;
+        *dst++ = b64[ i_bits>>26        ];
+        *dst++ = b64[(i_bits>>20) & 0x3F];
+        *dst++ = b64[(i_bits>>14) & 0x3F];
+        *dst++ = b64[(i_bits>>8 ) & 0x3F];
+    }
+    i_bits = 0;
+    while (bytes_remaining) {
+        i_bits = (i_bits << 8) + *in++;
+        bytes_remaining--;
+        i_shift += 8;
+    }
+    while (i_shift > 0) {
+        *dst++ = b64[(i_bits << 6 >> i_shift) & 0x3f];
+        i_shift -= 6;
+    }
+    while ((dst - ret) & 3)
+        *dst++ = '=';
+    *dst = '\0';
+
+    return ret;
 }
 
 #define SPACE_CHARS " \t\r\n"
@@ -996,64 +777,40 @@ int av_toupper(int c)
     }
     return c;
 }
-    
-// fromHexChar converts a hex character into its value and a success flag.
-uint8_t srs_from_hex_char(uint8_t c)
+
+int ff_hex_to_data(u_int8_t* data, const char* p)
 {
-    if ('0' <= c && c <= '9') {
-        return c - '0';
-    }
-    if ('a' <= c && c <= 'f') {
-        return c - 'a' + 10;
-    }
-    if ('A' <= c && c <= 'F') {
-        return c - 'A' + 10;
-    }
+    int c, len, v;
 
-    return -1;
-}
-
-char* srs_data_to_hex(char* des, const u_int8_t* src, int len)
-{
-    if(src == NULL || len == 0 || des == NULL){
-        return NULL;
-    }
-
-    const char *hex_table = "0123456789ABCDEF";
-    
-    for (int i=0; i<len; i++) {
-        des[i * 2]     = hex_table[src[i] >> 4];
-        des[i * 2 + 1] = hex_table[src[i] & 0x0F];
-    }  
-
-    return des;
-}
-
-int srs_hex_to_data(uint8_t* data, const char* p, int size)
-{
-    if (size <= 0 || (size%2) == 1) {
-        return -1;
-    }
-    
-    for (int i = 0; i < (int)size / 2; i++) {
-        uint8_t a = srs_from_hex_char(p[i*2]);
-        if (a == (uint8_t)-1) {
-            return -1;
+    len = 0;
+    v = 1;
+    for (;;) {
+        p += strspn(p, SPACE_CHARS);
+        if (*p == '\0')
+            break;
+        c = av_toupper((unsigned char) *p++);
+        if (c >= '0' && c <= '9')
+            c = c - '0';
+        else if (c >= 'A' && c <= 'F')
+            c = c - 'A' + 10;
+        else
+            break;
+        v = (v << 4) | c;
+        if (v & 0x100) {
+            if (data)
+                data[len] = v;
+            len++;
+            v = 1;
         }
-        
-        uint8_t b = srs_from_hex_char(p[i*2 + 1]);
-        if (b == (uint8_t)-1) {
-            return -1;
-        }
-        
-        data[i] = (a << 4) | b;
     }
-    
-    return size / 2;
+    return len;
 }
 
-int srs_chunk_header_c0(int perfer_cid, uint32_t timestamp, int32_t payload_length, int8_t message_type, int32_t stream_id, char* cache, int nb_cache)
-{
+int srs_chunk_header_c0(
+    int perfer_cid, u_int32_t timestamp, int32_t payload_length,
+    int8_t message_type, int32_t stream_id,
+    char* cache, int nb_cache
+) {
     // to directly set the field.
     char* pp = NULL;
     
@@ -1124,11 +881,13 @@ int srs_chunk_header_c0(int perfer_cid, uint32_t timestamp, int32_t payload_leng
     }
     
     // always has header
-    return (int)(p - cache);
+    return p - cache;
 }
 
-int srs_chunk_header_c3(int perfer_cid, uint32_t timestamp, char* cache, int nb_cache)
-{
+int srs_chunk_header_c3(
+    int perfer_cid, u_int32_t timestamp,
+    char* cache, int nb_cache
+) {
     // to directly set the field.
     char* pp = NULL;
     
@@ -1172,6 +931,6 @@ int srs_chunk_header_c3(int perfer_cid, uint32_t timestamp, char* cache, int nb_
     }
     
     // always has header
-    return (int)(p - cache);
+    return p - cache;
 }
 

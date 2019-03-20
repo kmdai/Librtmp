@@ -5,14 +5,23 @@ cmake_minimum_required(VERSION 3.4.1)
 add_subdirectory(polarssl-1.2.19)
 add_subdirectory(librtmp)
 
+#set(src
+#    rtmp_push.h
+#    rtmp_push.c
+#    rtmp_native.c
+#    rtmp_util.h
+#    rtmp_util.c)
 set(src
-    rtmp_push.h
-    rtmp_push.c
-    rtmp_native.c
-    rtmp_util.h
-    rtmp_util.c)
+        push/push_rtmp.c
+        rtmp_push.c
+        rtmp_util.c
+        push/push_native.c
+        push/push_queue.c
+        push/push_flvenc.c)
 
 add_library(push SHARED ${src})
+
+target_include_directories(push PRIVATE librtmp)
 
 find_library(lib-log log)
 target_link_libraries(push rtmp ${lib-log})

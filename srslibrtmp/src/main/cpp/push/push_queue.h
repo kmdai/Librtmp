@@ -15,7 +15,7 @@
 /**
  *
  */
-#define QUEUE_MAX_LENGTH (1024 * 1024 * 4)
+#define QUEUE_MAX_LENGTH (1024 * 1024 * 1)
 /**
  * sps|pps|aac
  */
