@@ -284,27 +284,26 @@ char *add_aac_adts(char *data, unsigned int size) {
 }
 
 int create_AACSequenceHeader(char **data, char *sequence, int size) {
-    int sequence_size = 4;
+    int sequence_size = 2 + size;
     (*data) = malloc(sequence_size);
     PutBitContext pb;
-    init_put_bits(&pb, *data, sequence_size);
+    init_put_bits(&pb, *data, 2);
 
     put_bits(&pb, 4, 10);//sound format aac=10
-    put_bits(&pb, 2, 2);//44kHz=3
+    put_bits(&pb, 2, 3);//44kHz=3
     put_bits(&pb, 1, 1);
     put_bits(&pb, 1, 0);
 
     put_bits(&pb, 8, 0);//0:aac sequence header; 1:raw
 
-    put_bits(&pb, 5, 2);//profile_objecttype
-    put_bits(&pb, 4, 4);//sample rate index
-    put_bits(&pb, 4, 1);//
-    put_bits(&pb, 1, 0);
-    put_bits(&pb, 1, 0);
-    put_bits(&pb, 1, 0);
-
-
+//    put_bits(&pb, 5, 2);//profile_objecttype
+//    put_bits(&pb, 4, 4);//sample rate index
+//    put_bits(&pb, 4, 1);//
+//    put_bits(&pb, 1, 0);
+//    put_bits(&pb, 1, 0);
+//    put_bits(&pb, 1, 0);
     flush_put_bits(&pb);
+    memcpy(*data, sequence, size);
     return sequence_size;
 }
 
@@ -314,7 +313,7 @@ int create_AudioPacket(char **data, char *nalu, int type, int size, int time) {
     PutBitContext pb;
     init_put_bits(&pb, *data, 2);
     put_bits(&pb, 4, 10);//sound format aac=10
-    put_bits(&pb, 2, 2);//44kHz=3
+    put_bits(&pb, 2, 3);//44kHz=3
     put_bits(&pb, 1, 1);//1 = 16-bit samples
     put_bits(&pb, 1, 0);//0 = Mono sound
 

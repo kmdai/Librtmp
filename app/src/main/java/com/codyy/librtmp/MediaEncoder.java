@@ -7,6 +7,8 @@ import android.media.MediaCodecInfo;
 import android.media.MediaCodecList;
 import android.media.MediaFormat;
 import android.media.MediaRecorder;
+import android.os.Handler;
+import android.os.Message;
 import android.text.TextUtils;
 import android.util.Log;
 import android.view.Surface;
@@ -25,8 +27,8 @@ import java.util.concurrent.locks.ReentrantLock;
 import static android.media.MediaCodec.BUFFER_FLAG_CODEC_CONFIG;
 
 
-public class MediaEncoder {
-
+public class MediaEncoder implements android.os.Handler.Callback {
+    public final static int START_PUSH = 0x04;
     private MediaCodec mVideoMediaCodec;
     private MediaCodec mAudioCodec;
     private AudioRecord mAudioRecord;
@@ -39,19 +41,19 @@ public class MediaEncoder {
     private Surface mSurface;
     private double mFrameRate;
     private int mBitrate;
-    private final int TIMEOUT_US = 10000;
+    private final int TIMEOUT_US = 1000000000;
 
     private final int AUDIO_SAMPLE_RATE = 44100;
     private final int AUDIO_BIT_RATE = 96000;
     private final int AUDIO_CHANNEL_COUNT = 1;
-
+    private Handler mHandler;
     AtomicBoolean mIsStop;
     //    private LibrtmpManager mLibrtmpManager;
     private String mRtmpUrl = "rtmp://10.23.164.30:1935/srs/kmdai";
     //                RTMPMuxer mRTMPMuxer;
     long indexTime = 0;
-//    private SRSLibrtmpManager mSRSLibrtmpManager;
-private LibrtmpManager mSRSLibrtmpManager;
+    //    private SRSLibrtmpManager mSRSLibrtmpManager;
+    private LibrtmpManager mSRSLibrtmpManager;
     private int mMiniAudioBufferSize;
 
     public MediaEncoder(int width, int height, int framerate, int bitrate) {
@@ -62,6 +64,7 @@ private LibrtmpManager mSRSLibrtmpManager;
         mBitrate = bitrate;
         mLock = new ReentrantLock();
         mCondition = mLock.newCondition();
+        mHandler = new Handler(this);
         mPCMS = new LinkedList<>();
 //        mSRSLibrtmpManager = new SRSLibrtmpManager();
         mSRSLibrtmpManager = new LibrtmpManager();
@@ -143,6 +146,17 @@ private LibrtmpManager mSRSLibrtmpManager;
                 mMiniAudioBufferSize);
     }
 
+    @Override
+    public boolean handleMessage(Message msg) {
+        if (msg.what == START_PUSH) {
+            new Thread(new RecordRunnable()).start();
+            new Thread(new RecordEncodec()).start();
+            new Thread(new RecordDecodec()).start();
+            return true;
+        }
+        return false;
+    }
+
     public class RecordRunnable implements Runnable {
         public RecordRunnable() {
 
@@ -157,13 +171,25 @@ private LibrtmpManager mSRSLibrtmpManager;
                 }
                 byte[] data = new byte[mMiniAudioBufferSize];
                 int length = mAudioRecord.read(data, 0, data.length);
-                if (length != AudioRecord.ERROR_BAD_VALUE &&
-                        length != AudioRecord.ERROR_INVALID_OPERATION &&
-                        length == mMiniAudioBufferSize) {
+                if (length == mMiniAudioBufferSize) {
                     PCM pcm = new PCM();
                     pcm.data = data;
                     pcm.time = PCM.currentTime();
                     addPCM(pcm);
+                } else {
+                    switch (length) {
+                        case AudioRecord.ERROR_BAD_VALUE:
+                            Log.e("mAudioRecord.read---", "ERROR_BAD_VALUE");
+                            break;
+                        case AudioRecord.ERROR_INVALID_OPERATION:
+                            Log.e("mAudioRecord.read---", "ERROR_INVALID_OPERATION");
+                            break;
+                        case AudioRecord.ERROR_DEAD_OBJECT:
+                            Log.e("mAudioRecord.read---", "ERROR_DEAD_OBJECT");
+                            break;
+                        default:
+                            Log.e("mAudioRecord.read---", "ERROR:" + length);
+                    }
                 }
             }
         }
@@ -196,7 +222,8 @@ private LibrtmpManager mSRSLibrtmpManager;
                     ByteBuffer inputBuffer = mAudioCodec.getInputBuffer(inputId);
                     inputBuffer.clear();
                     inputBuffer.put(pcm.data, 0, pcm.data.length);
-                    mAudioCodec.queueInputBuffer(inputId, 0, pcm.data.length, pcm.time, 0);
+                    Log.d("---", "queueInputBuffer:time:" + pcm.time / 1000);
+                    mAudioCodec.queueInputBuffer(inputId, 0, pcm.data.length, pcm.time / 1000, 0);
                 }
             }
         }
@@ -239,14 +266,14 @@ private LibrtmpManager mSRSLibrtmpManager;
                         outputBuffer.position(bufferInfo.offset);
                         outputBuffer.limit(bufferInfo.offset + bufferInfo.size);
                         byte[] outData = new byte[bufferInfo.size];
-//                        addADTStoPacket(outData, outData.length);
                         outputBuffer.get(outData, bufferInfo.offset, bufferInfo.size);
-                        calcTotalAudioTime(bufferInfo.presentationTimeUs / 1000);
+
                         if (bufferInfo.flags == BUFFER_FLAG_CODEC_CONFIG) {
 //                            Log.d("RecordDecodec---", "BUFFER_FLAG_CODEC_CONFIG");
                             mSRSLibrtmpManager.addFrame(outData, outData.length, SRSLibrtmpManager.NODE_TYPE_AUDIO, bufferInfo.flags, 0);
                         } else {
-//                            Log.d("RecordDecodec---", "other" + "bufferInfo.size:" + bufferInfo.size + "bufferInfo.time:" + bufferInfo.presentationTimeUs / 1000 + "--outData.length:" + outData.length + "--audioTimeIndex:" + audioTimeIndex);
+                            calcTotalAudioTime(bufferInfo.presentationTimeUs / 1000);
+//                            Log.d("RecordDecodec---", "bufferInfo.size:" + bufferInfo.size + "--bufferInfo.time:" + bufferInfo.presentationTimeUs + "--outData.length:" + outData.length + "--audioTimeIndex:" + audioTimeIndex);
                             mSRSLibrtmpManager.addFrame(outData, outData.length, SRSLibrtmpManager.NODE_TYPE_AUDIO, bufferInfo.flags, audioTimeIndex);
                         }
                         outputBuffer.clear();
@@ -281,9 +308,6 @@ private LibrtmpManager mSRSLibrtmpManager;
 
     public void start() {
         new Thread(new SendRunable()).start();
-        new Thread(new RecordRunnable()).start();
-        new Thread(new RecordEncodec()).start();
-        new Thread(new RecordDecodec()).start();
     }
 
     public class SendRunable implements Runnable {
@@ -303,6 +327,7 @@ private LibrtmpManager mSRSLibrtmpManager;
             mSRSLibrtmpManager.setAudiodatarate(29);
             mSRSLibrtmpManager.setAudiosamplerate(44100);
             mSRSLibrtmpManager.setAudiosamplesize(16);
+            mHandler.sendEmptyMessage(START_PUSH);
             MediaCodec.BufferInfo bufferInfo = new MediaCodec.BufferInfo();
             for (; ; ) {
                 if (mIsStop.get()) {
@@ -317,12 +342,13 @@ private LibrtmpManager mSRSLibrtmpManager;
                         outputBuffer.limit(bufferInfo.offset + bufferInfo.size);
                         byte[] outData = new byte[bufferInfo.size];
                         outputBuffer.get(outData, bufferInfo.offset, bufferInfo.size);
-                        calcTotalTime(bufferInfo.presentationTimeUs / 1000);
+
                         if (bufferInfo.flags == BUFFER_FLAG_CODEC_CONFIG) {
                             mSRSLibrtmpManager.addFrame(outData, outData.length, SRSLibrtmpManager.NODE_TYPE_VIDEO, bufferInfo.flags, 0);
 //                        mLibrtmpManager.setSpsPps(outData, outData.length);
                         } else {
-//                        Log.d("----", "getTimeIndex()--" + getTimeIndex());
+                            calcTotalTime(bufferInfo.presentationTimeUs / 1000);
+//                            Log.d("Frame----", "getTimeIndex()--" + getTimeIndex());
 //                        mLibrtmpManager.sendChunk(outData, outData.length, bufferInfo.flags, getTimeIndex());
 //                        time+=30;
                             mSRSLibrtmpManager.addFrame(outData, outData.length, SRSLibrtmpManager.NODE_TYPE_VIDEO, bufferInfo.flags, getTimeIndex());
@@ -356,7 +382,7 @@ private LibrtmpManager mSRSLibrtmpManager;
         if (lastAudioTime <= 0) {
             this.lastAudioTime = currentTimeUs;
         }
-        audioTimeIndex = (int) (currentTimeUs - lastAudioTime);
+        audioTimeIndex = currentTimeUs>lastAudioTime?(int) (currentTimeUs - lastAudioTime):audioTimeIndex;
     }
 
     public void calcTotalTime(long currentTimeUs) {
@@ -387,7 +413,7 @@ private LibrtmpManager mSRSLibrtmpManager;
         }
 
         public static long currentTime() {
-            return (System.nanoTime() - timeStart) / 1000;
+            return System.nanoTime() - timeStart;
         }
     }
 }

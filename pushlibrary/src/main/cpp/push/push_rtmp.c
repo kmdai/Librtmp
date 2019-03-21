@@ -86,7 +86,7 @@ void *push_data(void *gVm) {
             channel = 0x04;
             if (node_p->flag == NODE_FLAG_CODEC_CONFIG) {
                 header_type = RTMP_PACKET_SIZE_MEDIUM;
-                size = create_AACSequenceHeader(&data, 0, 0);
+                size = create_AACSequenceHeader(&data, node_p->data, node_p->size);
             } else {
                 header_type = RTMP_PACKET_SIZE_LARGE;
                 size = create_AudioPacket(&data, node_p->data, node_p->flag, node_p->size, 0);
@@ -115,8 +115,8 @@ void *push_data(void *gVm) {
         packet.m_nInfoField2 = m_pRtmp->m_stream_id;
         /*发送*/
         if (RTMP_IsConnected(m_pRtmp)) {
-            if (RTMP_SendPacket(m_pRtmp, &packet, TRUE)) {
-                SRS_LOGE("---%s", "send_sps_pps_true");
+            if (!RTMP_SendPacket(m_pRtmp, &packet, TRUE)) {
+                SRS_LOGE("---%s", "send__false");
             }
         }
         RTMPPacket_Free(&packet);
@@ -135,7 +135,7 @@ void *push_data(void *gVm) {
 void rtmp_start(JavaVM *gVm) {
     pthread_t pthread;
     int result = pthread_create(&pthread, NULL, push_data, gVm);
-    if (!result) {
+    if (result < 0) {
         SRS_LOGE("pthread_create false");
     }
     pthread_setname_np(pthread, "rtmp push data");
