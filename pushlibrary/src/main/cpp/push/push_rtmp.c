@@ -6,7 +6,6 @@
 #include "push_rtmp.h"
 #include "push_flvenc.h"
 #include <sys/prctl.h>
-#include "../rtmp_push.h"
 
 RTMP *m_pRtmp;
 media_config *media_config_p;
@@ -57,12 +56,9 @@ void write_raw_frames(char *data, int32_t size, u_int32_t dts, u_int32_t pts) {
     if (NULL == m_pRtmp) {
         return;
     }
-//    srs_h264_write_raw_frames(srs_rtmp, data, size, dts, pts);
 }
 
 void add_frame(char *data, int32_t size, int32_t type, uint32_t time) {
-//    q_node_p node_p = create_node(data, size, type, time);
-//    in_queue(node_p);
 }
 
 
@@ -79,7 +75,7 @@ void *push_data(void *gVm) {
         if (NULL == node_p) {
             break;
         }
-//        RTMPPacket packet;
+        RTMPPacket packet;
         uint8_t packet_type;
         uint8_t header_type;
         int size = 0;
@@ -99,40 +95,31 @@ void *push_data(void *gVm) {
             packet_type = RTMP_PACKET_TYPE_VIDEO;
             channel = 0x04;
             if (node_p->flag == NODE_FLAG_CODEC_CONFIG) {
-                set_sps_pps(node_p->data,node_p->size);
                 header_type = RTMP_PACKET_SIZE_MEDIUM;
                 size = create_AVCVideoPacket(&data, node_p->data, node_p->size);
             } else {
-                NaluUnit naluUnit;
-                naluUnit.data=node_p->data;
-                naluUnit.size=node_p->size;
-                send_rtmp_packet(&naluUnit,0,node_p->time,0);
                 header_type = RTMP_PACKET_SIZE_LARGE;
                 size = create_VideoPacket(&data, node_p->data, node_p->flag, node_p->size, 0);
             }
 
         }
-//        RTMPPacket_Alloc(&packet, size);
-//        RTMPPacket_Reset(&packet);
-//        memcpy(packet.m_body, data, size);
-//        SRS_LOGE("----%d", size);
-//        packet.m_packetType = packet_type;
-//        packet.m_nBodySize = size;
-//        packet.m_nChannel = channel;
-//        packet.m_nTimeStamp = 0;
-//        packet.m_hasAbsTimestamp = node_p->time;
-//        packet.m_headerType = header_type;
-//        packet.m_nInfoField2 = m_pRtmp->m_stream_id;
-//        int ret = 0;
-//        if (RTMP_IsConnected(m_pRtmp)) {
-//            ret = RTMP_SendPacket(m_pRtmp, &packet, TRUE);
-//            if (!ret) {
-//                SRS_LOGE("----%s", "RTMP_SendPacket_FALSE");
-//            }
-//        } else {
-//            SRS_LOGE("----%s", "RTMP_IsConnected_FALSE");
-//        }
-//        RTMPPacket_Free(&packet);
+        RTMPPacket_Alloc(&packet, size);
+        RTMPPacket_Reset(&packet);
+        memcpy(packet.m_body, data, size);
+        packet.m_packetType = packet_type;
+        packet.m_nBodySize = size;
+        packet.m_nChannel = channel;
+        packet.m_nTimeStamp = node_p->time;
+        packet.m_hasAbsTimestamp = 0;
+        packet.m_headerType = header_type;
+        packet.m_nInfoField2 = m_pRtmp->m_stream_id;
+        /*发送*/
+        if (RTMP_IsConnected(m_pRtmp)) {
+            if (RTMP_SendPacket(m_pRtmp, &packet, TRUE)) {
+                SRS_LOGE("---%s", "send_sps_pps_true");
+            }
+        }
+        RTMPPacket_Free(&packet);
         free(data);
         free(node_p);
     }
