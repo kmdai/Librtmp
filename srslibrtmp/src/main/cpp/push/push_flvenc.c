@@ -296,12 +296,6 @@ int create_AACSequenceHeader(char **data, char *sequence, int size) {
 
     put_bits(&pb, 8, 0);//0:aac sequence header; 1:raw
 
-//    put_bits(&pb, 5, 2);//profile_objecttype
-//    put_bits(&pb, 4, 4);//sample rate index
-//    put_bits(&pb, 4, 1);//
-//    put_bits(&pb, 1, 0);
-//    put_bits(&pb, 1, 0);
-//    put_bits(&pb, 1, 0);
     flush_put_bits(&pb);
     memcpy(*data, sequence, size);
     return sequence_size;

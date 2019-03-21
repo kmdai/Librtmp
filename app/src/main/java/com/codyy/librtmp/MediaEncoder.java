@@ -48,12 +48,12 @@ public class MediaEncoder implements android.os.Handler.Callback {
     private final int AUDIO_CHANNEL_COUNT = 1;
     private Handler mHandler;
     AtomicBoolean mIsStop;
-    //    private LibrtmpManager mLibrtmpManager;
+//        private LibrtmpManager mLibrtmpManager;
     private String mRtmpUrl = "rtmp://10.23.164.30:1935/srs/kmdai";
     //                RTMPMuxer mRTMPMuxer;
     long indexTime = 0;
-    //    private SRSLibrtmpManager mSRSLibrtmpManager;
-    private LibrtmpManager mSRSLibrtmpManager;
+        private SRSLibrtmpManager mSRSLibrtmpManager;
+//    private LibrtmpManager mSRSLibrtmpManager;
     private int mMiniAudioBufferSize;
 
     public MediaEncoder(int width, int height, int framerate, int bitrate) {
@@ -66,8 +66,8 @@ public class MediaEncoder implements android.os.Handler.Callback {
         mCondition = mLock.newCondition();
         mHandler = new Handler(this);
         mPCMS = new LinkedList<>();
-//        mSRSLibrtmpManager = new SRSLibrtmpManager();
-        mSRSLibrtmpManager = new LibrtmpManager();
+        mSRSLibrtmpManager = new SRSLibrtmpManager();
+//        mSRSLibrtmpManager = new LibrtmpManager();
         reset();
         MediaFormat mediaFormat = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, width, height);
         MediaCodecList mediaCodecList = new MediaCodecList(MediaCodecList.REGULAR_CODECS);
@@ -222,7 +222,7 @@ public class MediaEncoder implements android.os.Handler.Callback {
                     ByteBuffer inputBuffer = mAudioCodec.getInputBuffer(inputId);
                     inputBuffer.clear();
                     inputBuffer.put(pcm.data, 0, pcm.data.length);
-                    Log.d("---", "queueInputBuffer:time:" + pcm.time / 1000);
+//                    Log.d("---", "queueInputBuffer:time:" + pcm.time / 1000);
                     mAudioCodec.queueInputBuffer(inputId, 0, pcm.data.length, pcm.time / 1000, 0);
                 }
             }
@@ -306,7 +306,10 @@ public class MediaEncoder implements android.os.Handler.Callback {
         mLock.unlock();
     }
 
-    public void start() {
+    public void start(String url) {
+        if (!TextUtils.isEmpty(url)) {
+            mRtmpUrl = url;
+        }
         new Thread(new SendRunable()).start();
     }
 
@@ -382,7 +385,7 @@ public class MediaEncoder implements android.os.Handler.Callback {
         if (lastAudioTime <= 0) {
             this.lastAudioTime = currentTimeUs;
         }
-        audioTimeIndex = currentTimeUs>lastAudioTime?(int) (currentTimeUs - lastAudioTime):audioTimeIndex;
+        audioTimeIndex = currentTimeUs > lastAudioTime ? (int) (currentTimeUs - lastAudioTime) : audioTimeIndex;
     }
 
     public void calcTotalTime(long currentTimeUs) {

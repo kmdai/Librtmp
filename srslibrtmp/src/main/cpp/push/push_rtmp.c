@@ -71,7 +71,7 @@ void *push_data(void *gVm) {
             char *data;
             int size = 0;
             if (node_p->flag == NODE_FLAG_CODEC_CONFIG) {
-                size = create_AACSequenceHeader(&data, 0, 0);
+                size = create_AACSequenceHeader(&data, node_p->data, node_p->size);
             } else {
                 size = create_AudioPacket(&data, node_p->data, node_p->flag, node_p->size, 0);
             }
