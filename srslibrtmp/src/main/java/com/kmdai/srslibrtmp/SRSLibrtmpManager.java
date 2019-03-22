@@ -5,7 +5,7 @@ public class SRSLibrtmpManager {
     public final static int NODE_TYPE_VIDEO = 2;
 
     static {
-        System.loadLibrary("srsPush");
+        System.loadLibrary("ndkmedia");
     }
 
     /**
@@ -43,4 +43,6 @@ public class SRSLibrtmpManager {
     public native void setAudiosamplesize(double audiosamplesize);
 
     public native Object getSurface();
+
+    public native void openAudioRecord();
 }

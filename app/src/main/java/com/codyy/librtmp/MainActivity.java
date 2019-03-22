@@ -58,6 +58,7 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         mEdittext = findViewById(R.id.edittext);
+        mUrl = mEdittext.getText().toString();
         mSpinner = findViewById(R.id.spinner);
         DisplayMetrics metrics = new DisplayMetrics();
         getWindowManager().getDefaultDisplay().getMetrics(metrics);

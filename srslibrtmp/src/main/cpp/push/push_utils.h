@@ -8,6 +8,10 @@
 
 #include <android/log.h>
 
+#ifdef __cplusplus
+extern "C"
+{
+#endif
 #define SRS_LOGE(...) ((void)__android_log_print(ANDROID_LOG_ERROR, "push", __VA_ARGS__))
 
 #define AV_WB32(p, val) do {                 \
@@ -105,6 +109,8 @@ static inline void addADTStoPacket(char *packet, int packetLen) {
     packet[5] = (char) (((packetLen & 7) << 5) + 0x1F);
     packet[6] = (char) 0xFC;
 }
-
+#ifdef __cplusplus
+};
+#endif
 #endif
 

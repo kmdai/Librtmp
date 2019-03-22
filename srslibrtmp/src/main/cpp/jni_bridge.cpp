@@ -2,40 +2,39 @@
 // Created by kmdai on 18-4-19.
 //
 
-#include <AudioRecordEngine.h>
-#include "push_rtmp.h"
-#include "AudioRecordEngine.h"
+#include <jni.h>
+#include "push/push_rtmp.h"
+#include "media/AudioRecordEngine.h"
 
-#ifdef __cplusplus
 extern "C"
 {
-#endif
 #define SRS_ARRAY_ELEMS(a)  (sizeof(a) / sizeof(a[0]))
 #define JNI_CLS_MANAGER "com/kmdai/srslibrtmp/SRSLibrtmpManager"
 static JavaVM *javaVM;
-static long audio_record;
+//static long audio_record;
+AudioRecordEngine* audioRecordEngine;
 
 jboolean setUrl(JNIEnv *env, jobject instance, jstring url) {
-    const char *rtmp_url = (*env)->GetStringUTFChars(env, url, 0);
+    const char *rtmp_url = env->GetStringUTFChars( url, 0);
     int result = init_srs(rtmp_url);
     if (result != 0) {
         rtmp_start(javaVM);
     }
-    (*env)->ReleaseStringUTFChars(env, url, rtmp_url);
+    env->ReleaseStringUTFChars( url, rtmp_url);
     return result != 0 ? JNI_TRUE : JNI_FALSE;
 }
 
 void addFrame(JNIEnv *env, jobject instance, jbyteArray data, jint size, jint type, jint flag,
               jint time) {
-    jbyte *chunk = (*env)->GetByteArrayElements(env, data, NULL);
-    q_node_p node = create_node((char *) chunk, size, type, flag, time);
+    jbyte *chunk = env->GetByteArrayElements( data, NULL);
+    q_node_p node = create_node((char *) chunk, size, (node_type)type, flag, time);
     in_queue(node);
-    (*env)->ReleaseByteArrayElements(env, data, chunk, 0);
+    env->ReleaseByteArrayElements(data, chunk, 0);
 }
 
 void release(JNIEnv *env, jobject instance) {
     rtmp_destroy();
-    startAudioRecord();
+    delete audioRecordEngine;
 }
 
 void setFrameRate(JNIEnv *env, jobject instance, jdouble framerate) {
@@ -71,7 +70,9 @@ void setAudiosamplesize(JNIEnv *env, jobject instance, jdouble audiosamplesize) 
 }
 
 void openAudioRecord(JNIEnv *env, jobject instance) {
-    audio_record = startAudioRecord();
+//    audio_record = startAudioRecord();
+    audioRecordEngine=new AudioRecordEngine();
+    audioRecordEngine->openRecordingStream();
 }
 
 /**
@@ -102,18 +103,18 @@ const JNINativeMethod srs_methods[] = {
 JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
     javaVM = vm;
     JNIEnv *jenv;
-    if ((*vm)->GetEnv(vm, (void **) &jenv, JNI_VERSION_1_6) != JNI_OK) {
+    if (vm->GetEnv((void **) &jenv, JNI_VERSION_1_6) != JNI_OK) {
         SRS_LOGE("Env not got");
         return JNI_ERR;
     }
 
-    jclass clz = (*jenv)->FindClass(jenv, JNI_CLS_MANAGER);
+    jclass clz = jenv->FindClass( JNI_CLS_MANAGER);
     if (clz == NULL) {
         SRS_LOGE("JNI_OnLoad:Class %s not found", JNI_CLS_MANAGER);
         return JNI_ERR;
     }
 
-    if ((*jenv)->RegisterNatives(jenv, clz, srs_methods, SRS_ARRAY_ELEMS(srs_methods))) {
+    if (jenv->RegisterNatives( clz, srs_methods, SRS_ARRAY_ELEMS(srs_methods))) {
         SRS_LOGE("methods not registered");
         return JNI_ERR;
     }
@@ -126,18 +127,16 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
  */
 JNIEXPORT void JNI_OnUnload(JavaVM *vm, void *reserved) {
     JNIEnv *jenv;
-    if ((*vm)->GetEnv(vm, (void **) &jenv, JNI_VERSION_1_6) != JNI_OK) {
+    if (vm->GetEnv((void **) &jenv, JNI_VERSION_1_6) != JNI_OK) {
         SRS_LOGE("Env not got");
         return;
     }
-    jclass clz = (*jenv)->FindClass(jenv, JNI_CLS_MANAGER);
+    jclass clz = jenv->FindClass( JNI_CLS_MANAGER);
     if (clz == NULL) {
         SRS_LOGE("JNI_OnUnload:Class %s not found", JNI_CLS_MANAGER);
         return;
     }
-    (*jenv)->UnregisterNatives(jenv, clz);
+    jenv->UnregisterNatives( clz);
 }
 
-#ifdef __cplusplus
 };
-#endif

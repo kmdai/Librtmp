@@ -11,7 +11,10 @@
 #include <string.h>
 #include <pthread.h>
 #include "push_utils.h"
-
+#ifdef __cplusplus
+extern "C"
+{
+#endif
 /**
  *
  */
@@ -88,4 +91,7 @@ void cancel_queue();
  */
 q_node_p create_node(char *data, uint32_t size, node_type type, int32_t flag, uint32_t time);
 
+#ifdef __cplusplus
+};
+#endif
 #endif //LIBRTMP_PUSH_QUEUE_H

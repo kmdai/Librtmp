@@ -8,6 +8,11 @@
 #include <stdio.h>
 #include <stdbool.h>
 
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+
 /**
  *
  * @param framerate 帧率
@@ -43,6 +48,10 @@ int create_VideoPacket(char **data, char *nalu, int type, int size, int time);
 int create_AACSequenceHeader(char **data, char *sequence, int size);
 
 int create_AudioPacket(char **data, char *nalu, int type, int size, int time);
+
 char *add_aac_adts(char *data, unsigned int size);
 
+#ifdef __cplusplus
+};
+#endif
 #endif //LIBRTMP_PUSH_FLVENC_H

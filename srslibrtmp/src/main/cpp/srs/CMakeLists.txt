@@ -62,12 +62,12 @@ target_include_directories(srsrtmp
         PRIVATE core kernel protocol
         PUBLIC libs)
 
-target_compile_options(srsrtmp
-        PRIVATE
-        -std=c++03
-        -Wpointer-sign
-        -Wreserved-user-defined-literal)
+
 
 find_library(lib-log log)
 
 target_link_libraries(srsrtmp ${lib-log})
+
+target_compile_options(srsrtmp
+        PRIVATE
+        -std=c++03)

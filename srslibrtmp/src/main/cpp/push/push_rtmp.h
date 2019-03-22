@@ -11,6 +11,10 @@
 #include <pthread.h>
 #include "push_utils.h"
 
+#ifdef __cplusplus
+extern "C"
+{
+#endif
 
 typedef struct mediaConfig {
     double framerate;
@@ -51,4 +55,7 @@ void set_audiosamplerate(double audiosamplerate);
 
 void set_audiosamplesize(double audiosamplesize);
 
+#ifdef __cplusplus
+};
+#endif
 #endif //LIBRTMP_PUSH_RTMP_H

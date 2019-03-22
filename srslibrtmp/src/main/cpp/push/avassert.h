@@ -29,6 +29,10 @@
 
 #include <stdlib.h>
 
+#ifdef __cplusplus
+extern "C"
+{
+#endif
 /**
  * assert() equivalent, that is always enabled.
  */
@@ -69,5 +73,7 @@
  * This will av_assert0() that the cpu is not in MMX state on X86
  */
 void av_assert0_fpu(void);
-
+#ifdef __cplusplus
+};
+#endif
 #endif /* AVUTIL_AVASSERT_H */

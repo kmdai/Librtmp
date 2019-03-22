@@ -9,6 +9,7 @@ import android.media.MediaFormat;
 import android.media.MediaRecorder;
 import android.os.Handler;
 import android.os.Message;
+import android.os.SystemClock;
 import android.text.TextUtils;
 import android.util.Log;
 import android.view.Surface;
@@ -48,12 +49,12 @@ public class MediaEncoder implements android.os.Handler.Callback {
     private final int AUDIO_CHANNEL_COUNT = 1;
     private Handler mHandler;
     AtomicBoolean mIsStop;
-//        private LibrtmpManager mLibrtmpManager;
+    //        private LibrtmpManager mLibrtmpManager;
     private String mRtmpUrl = "rtmp://10.23.164.30:1935/srs/kmdai";
     //                RTMPMuxer mRTMPMuxer;
     long indexTime = 0;
-        private SRSLibrtmpManager mSRSLibrtmpManager;
-//    private LibrtmpManager mSRSLibrtmpManager;
+    private SRSLibrtmpManager mSRSLibrtmpManager;
+//        private LibrtmpManager mSRSLibrtmpManager;
     private int mMiniAudioBufferSize;
 
     public MediaEncoder(int width, int height, int framerate, int bitrate) {
@@ -100,10 +101,10 @@ public class MediaEncoder implements android.os.Handler.Callback {
         }
         mVideoMediaCodec.configure(mediaFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
         mSurface = mVideoMediaCodec.createInputSurface();
-        audioInit();
+//        audioInit();
         mVideoMediaCodec.start();
-        mAudioRecord.startRecording();
-        mAudioCodec.start();
+//        mAudioRecord.startRecording();
+//        mAudioCodec.start();
     }
 
     /**
@@ -129,8 +130,9 @@ public class MediaEncoder implements android.os.Handler.Callback {
             e.printStackTrace();
         }
         mediaFormat.setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AACObjectLC);
-        mediaFormat.setInteger(MediaFormat.KEY_CHANNEL_COUNT, 1);
+        mediaFormat.setInteger(MediaFormat.KEY_CHANNEL_COUNT, AUDIO_CHANNEL_COUNT);
         mediaFormat.setInteger(MediaFormat.KEY_SAMPLE_RATE, AUDIO_SAMPLE_RATE);
+//        mediaFormat.setInteger(MediaFormat.KEY_PCM_ENCODING, AudioFormat.ENCODING_PCM_16BIT);
         mediaFormat.setInteger(MediaFormat.KEY_BIT_RATE, AUDIO_BIT_RATE);
 
         mAudioCodec.configure(mediaFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
@@ -149,9 +151,9 @@ public class MediaEncoder implements android.os.Handler.Callback {
     @Override
     public boolean handleMessage(Message msg) {
         if (msg.what == START_PUSH) {
-            new Thread(new RecordRunnable()).start();
-            new Thread(new RecordEncodec()).start();
-            new Thread(new RecordDecodec()).start();
+//            new Thread(new RecordRunnable()).start();
+//            new Thread(new RecordEncodec()).start();
+//            new Thread(new RecordDecodec()).start();
             return true;
         }
         return false;
@@ -199,6 +201,7 @@ public class MediaEncoder implements android.os.Handler.Callback {
 
         @Override
         public void run() {
+            MediaCodec.BufferInfo bufferInfo = new MediaCodec.BufferInfo();
             for (; ; ) {
                 mLock.lock();
                 PCM pcm = null;
@@ -209,6 +212,8 @@ public class MediaEncoder implements android.os.Handler.Callback {
                         e.printStackTrace();
                     }
                     if (mIsStop.get()) {
+                        mAudioCodec.stop();
+                        mAudioCodec.release();
                         mLock.unlock();
                         mAudioRecord.stop();
                         Log.d("---", "mAudioRecord:release");
@@ -223,7 +228,28 @@ public class MediaEncoder implements android.os.Handler.Callback {
                     inputBuffer.clear();
                     inputBuffer.put(pcm.data, 0, pcm.data.length);
 //                    Log.d("---", "queueInputBuffer:time:" + pcm.time / 1000);
-                    mAudioCodec.queueInputBuffer(inputId, 0, pcm.data.length, pcm.time / 1000, 0);
+                    mAudioCodec.queueInputBuffer(inputId, 0, pcm.data.length, pcm.time, 0);
+                }
+                int outputBufferId = mAudioCodec.dequeueOutputBuffer(bufferInfo, TIMEOUT_US);
+                if (outputBufferId >= 0) {
+                    ByteBuffer outputBuffer = mAudioCodec.getOutputBuffer(outputBufferId);
+                    if (outputBuffer != null) {
+                        outputBuffer.position(bufferInfo.offset);
+                        outputBuffer.limit(bufferInfo.offset + bufferInfo.size);
+                        byte[] outData = new byte[bufferInfo.size];
+                        outputBuffer.get(outData, bufferInfo.offset, bufferInfo.size);
+
+                        if (bufferInfo.flags == BUFFER_FLAG_CODEC_CONFIG) {
+//                            Log.d("RecordDecodec---", "BUFFER_FLAG_CODEC_CONFIG");
+                            mSRSLibrtmpManager.addFrame(outData, outData.length, SRSLibrtmpManager.NODE_TYPE_AUDIO, bufferInfo.flags, 0);
+                        } else {
+                            calcTotalAudioTime(bufferInfo.presentationTimeUs / 1000);
+//                            Log.d("RecordDecodec---", "bufferInfo.size:" + bufferInfo.size + "--bufferInfo.time:" + bufferInfo.presentationTimeUs + "--outData.length:" + outData.length + "--audioTimeIndex:" + audioTimeIndex);
+                            mSRSLibrtmpManager.addFrame(outData, outData.length, SRSLibrtmpManager.NODE_TYPE_AUDIO, bufferInfo.flags, audioTimeIndex);
+                        }
+                        outputBuffer.clear();
+                    }
+                    mAudioCodec.releaseOutputBuffer(outputBufferId, false);
                 }
             }
         }
@@ -412,11 +438,11 @@ public class MediaEncoder implements android.os.Handler.Callback {
         static long timeStart;
 
         public static void timeReset() {
-            timeStart = System.nanoTime();
+            timeStart = SystemClock.elapsedRealtimeNanos();
         }
 
         public static long currentTime() {
-            return System.nanoTime() - timeStart;
+            return (SystemClock.elapsedRealtimeNanos() - timeStart) / 1000;
         }
     }
 }
