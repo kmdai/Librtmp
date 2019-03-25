@@ -48,17 +48,19 @@ public class MediaEncoder implements android.os.Handler.Callback {
     private final int AUDIO_BIT_RATE = 96000;
     private final int AUDIO_CHANNEL_COUNT = 1;
     private Handler mHandler;
-    AtomicBoolean mIsStop;
+    AtomicBoolean mIsStop = new AtomicBoolean(false);
     //        private LibrtmpManager mLibrtmpManager;
     private String mRtmpUrl = "rtmp://10.23.164.30:1935/srs/kmdai";
     //                RTMPMuxer mRTMPMuxer;
     long indexTime = 0;
     private SRSLibrtmpManager mSRSLibrtmpManager;
-//        private LibrtmpManager mSRSLibrtmpManager;
+    //        private LibrtmpManager mSRSLibrtmpManager;
     private int mMiniAudioBufferSize;
 
     public MediaEncoder(int width, int height, int framerate, int bitrate) {
-        mIsStop = new AtomicBoolean(false);
+        if (mIsStop.get()) {
+            return;
+        }
         m_width = width;
         m_height = height;
         mFrameRate = framerate;
@@ -101,10 +103,11 @@ public class MediaEncoder implements android.os.Handler.Callback {
         }
         mVideoMediaCodec.configure(mediaFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
         mSurface = mVideoMediaCodec.createInputSurface();
-//        audioInit();
+        audioInit();
         mVideoMediaCodec.start();
-//        mAudioRecord.startRecording();
-//        mAudioCodec.start();
+//        mSRSLibrtmpManager.openAudioRecord();
+        mAudioRecord.startRecording();
+        mAudioCodec.start();
     }
 
     /**
@@ -151,8 +154,8 @@ public class MediaEncoder implements android.os.Handler.Callback {
     @Override
     public boolean handleMessage(Message msg) {
         if (msg.what == START_PUSH) {
-//            new Thread(new RecordRunnable()).start();
-//            new Thread(new RecordEncodec()).start();
+            new Thread(new RecordRunnable()).start();
+            new Thread(new RecordEncodec()).start();
 //            new Thread(new RecordDecodec()).start();
             return true;
         }

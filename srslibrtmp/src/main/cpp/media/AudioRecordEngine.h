@@ -33,8 +33,8 @@ public:
     void closeStream(oboe::AudioStream *stream);
 
 private:
-    int32_t mSampleRate = oboe::kUnspecified;
-    int32_t mRecordingDeviceId = 44100;
+    int32_t mSampleRate = 44100;
+    int32_t mRecordingDeviceId = oboe::kUnspecified;
     oboe::AudioStream *mRecordStream = nullptr;
     oboe::AudioFormat mFormat = oboe::AudioFormat::I16;
     int32_t mInputChannelCount = oboe::ChannelCount::Mono;
