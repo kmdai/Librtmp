@@ -1,0 +1,19 @@
+cmake_minimum_required(VERSION 3.4.1)
+
+project(mp4v2)
+
+#add_library(mp4v2s
+#        SHARED
+#        IMPORTED)
+#
+#set_target_properties(mp4v2s
+#        PROPERTIES IMPORTED_LOCATION
+#        ${ANDROID_ABI}/lib/libmp4v2.so.2.0.0)
+#
+#add_library(mp4v2a
+#        STATIC
+#        IMPORTED)
+#
+#set_target_properties(mp4v2a
+#        PROPERTIES IMPORTED_LOCATION
+#        ${ANDROID_ABI}/lib/libmp4v2.a)
