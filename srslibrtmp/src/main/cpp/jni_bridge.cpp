@@ -12,7 +12,7 @@ extern "C"
 #define JNI_CLS_MANAGER "com/kmdai/srslibrtmp/SRSLibrtmpManager"
 static JavaVM *javaVM;
 //static long audio_record;
-AudioRecordEngine* audioRecordEngine;
+//AudioRecordEngine* audioRecordEngine;
 
 jboolean setUrl(JNIEnv *env, jobject instance, jstring url) {
     const char *rtmp_url = env->GetStringUTFChars( url, 0);
@@ -34,7 +34,7 @@ void addFrame(JNIEnv *env, jobject instance, jbyteArray data, jint size, jint ty
 
 void release(JNIEnv *env, jobject instance) {
     rtmp_destroy();
-    delete audioRecordEngine;
+//    delete audioRecordEngine;
 }
 
 void setFrameRate(JNIEnv *env, jobject instance, jdouble framerate) {
@@ -71,8 +71,8 @@ void setAudiosamplesize(JNIEnv *env, jobject instance, jdouble audiosamplesize) 
 
 void openAudioRecord(JNIEnv *env, jobject instance) {
 //    audio_record = startAudioRecord();
-    audioRecordEngine=new AudioRecordEngine();
-    audioRecordEngine->openRecordingStream();
+//    audioRecordEngine=new AudioRecordEngine();
+//    audioRecordEngine->openRecordingStream();
 }
 
 /**

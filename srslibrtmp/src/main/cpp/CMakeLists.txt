@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.4.1)
 #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 add_subdirectory(srs)
 add_subdirectory(oboe ./oboe-bin)
-#add_subdirectory(mp4v2)
+add_subdirectory(mp4v2)
 
 set(push
         push/push_rtmp.c
@@ -25,13 +25,13 @@ set(media
 
 add_library(ndkmedia SHARED ${media})
 
-add_library(mp4v2 SHARED IMPORTED)
-
-set_target_properties(mp4v2 PROPERTIES IMPORTED_LOCATION
-        ${CMAKE_SOURCE_DIR}/mp4v2/${ANDROID_ABI}/lib/libmp4v2.so.2.0.0)
+#add_library(mp4v2 STATIC IMPORTED)
+#
+#set_target_properties(mp4v2 PROPERTIES IMPORTED_LOCATION
+#        ${CMAKE_SOURCE_DIR}/mp4v2/lib/${ANDROID_ABI}/libmp4v2.a)
 
 target_link_libraries(ndkmedia oboe android mediandk atomic srsPush mp4v2)
-target_include_directories(ndkmedia PRIVATE oboe/include push mp4v2/${ANDROID_ABI}/include)
+target_include_directories(ndkmedia PRIVATE oboe/include push mp4v2/include/)
 target_compile_options(ndkmedia
         PRIVATE
         -std=c++11)
