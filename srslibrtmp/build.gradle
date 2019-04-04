@@ -33,7 +33,7 @@ android {
     }
     sourceSets {
         main {
-            jniLibs.srcDirs 'src/main/cpp/mp4v2/lib'
+//            jniLibs.srcDir 'libs'
         }
     }
 }

@@ -3,21 +3,11 @@ cmake_minimum_required(VERSION 3.4.1)
 INCLUDE_DIRECTORIES("${PROJECT_SOURCE_DIR}/polarssl-1.2.19/include/")
 
 
-set(src
-    amf.c
-    amf.h
-    bytes.h
-    dh.h
-    dhgroups.h
-    hashswf.c
-    http.h
-    log.c
-    log.h
-    parseurl.c
-    rtmp.c
-    rtmp.h
-    rtmp_sys.h
-)
+set(src amf.c
+        hashswf.c
+        log.c
+        parseurl.c
+        rtmp.c)
 set(librtmp "rtmp")
 
 #添加USE_POLARSSL宏定义

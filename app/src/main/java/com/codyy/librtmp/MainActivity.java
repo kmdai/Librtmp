@@ -63,7 +63,7 @@ public class MainActivity extends Activity {
         DisplayMetrics metrics = new DisplayMetrics();
         getWindowManager().getDefaultDisplay().getMetrics(metrics);
         mScreenDensity = metrics.densityDpi;
-        String[] permission = {Manifest.permission.RECORD_AUDIO};
+        String[] permission = {Manifest.permission.RECORD_AUDIO, Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE};
         if (ContextCompat.checkSelfPermission(this,
                 Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {

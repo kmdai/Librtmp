@@ -5,6 +5,10 @@
 #include <jni.h>
 #include "push/push_rtmp.h"
 #include "media/AudioRecordEngine.h"
+#include "media/MP4Encoder.h"
+#include "push_flvenc.h"
+#include <pthread.h>
+#include "media/Mp4Mux.h"
 
 extern "C"
 {
@@ -13,27 +17,84 @@ extern "C"
 static JavaVM *javaVM;
 //static long audio_record;
 //AudioRecordEngine* audioRecordEngine;
-
+//Mp4Mux *mp4Mux;
+MP4Encoder *mp4Encoder;
+MP4FileHandle mp4FileHandle;
+void *mux(void *p);
 jboolean setUrl(JNIEnv *env, jobject instance, jstring url) {
-    const char *rtmp_url = env->GetStringUTFChars( url, 0);
+    const char *rtmp_url = env->GetStringUTFChars(url, 0);
     int result = init_srs(rtmp_url);
     if (result != 0) {
-        rtmp_start(javaVM);
+//        rtmp_start(javaVM);
+//        mp4Mux = new Mp4Mux();
+        mp4Encoder=new MP4Encoder();
+        pthread_t pthread;
+        pthread_attr_t attr;
+        pthread_attr_init(&attr);
+
+        pthread_create(&pthread, &attr, mux, javaVM);
     }
-    env->ReleaseStringUTFChars( url, rtmp_url);
+    env->ReleaseStringUTFChars(url, rtmp_url);
     return result != 0 ? JNI_TRUE : JNI_FALSE;
 }
 
 void addFrame(JNIEnv *env, jobject instance, jbyteArray data, jint size, jint type, jint flag,
               jint time) {
-    jbyte *chunk = env->GetByteArrayElements( data, NULL);
-    q_node_p node = create_node((char *) chunk, size, (node_type)type, flag, time);
+    jbyte *chunk = env->GetByteArrayElements(data, NULL);
+    q_node_p node = create_node((char *) chunk, size, (node_type) type, flag, time);
+
+    if (node->type == NODE_TYPE_VIDEO && node->flag == NODE_FLAG_CODEC_CONFIG) {
+        Mp4Context *context = new Mp4Context();
+        context->width = media_config_p->width;
+        context->height = media_config_p->height;
+        context->simple_rate = media_config_p->audiosamplesize;
+        context->frame_rate = media_config_p->framerate;
+        uint32_t prefix = 0;
+        int start = find_sps_pps_pos(node->data, node->size, 0, &prefix);
+        int p_start = find_sps_pps_pos(node->data, node->size, start, &prefix);
+        context->sampleLenFieldSizeMinusOne = prefix;
+        context->sps_len = p_start - start - prefix;
+        context->pps_len = node->size - p_start;
+        context->sps = (uint8_t *) malloc(context->sps_len);
+        context->pps = (uint8_t *) malloc(context->pps_len);
+        memcpy(context->sps, node->data + start, context->sps_len);
+        memcpy(context->pps, node->data + p_start, context->pps_len);
+//        mp4Mux->setMp4Context(context);
+//        mp4Mux->initMp4File("/sdcard/DCIM/100ANDRO/test_06.mp4");
+        mp4FileHandle = mp4Encoder->CreateMP4File("/sdcard/DCIM/100ANDRO/test_05.mp4", media_config_p->width, media_config_p->height,
+                90000,media_config_p->framerate);
+    }
     in_queue(node);
     env->ReleaseByteArrayElements(data, chunk, 0);
 }
 
+void *mux(void *gVm) {
+    JavaVM *gvm = (JavaVM *) gVm;
+    JNIEnv *env = NULL;
+    if (0 != gvm->AttachCurrentThread(&env, NULL)) {
+        return (void *) 0;
+    }
+    for (;;) {
+        q_node_p node_p = out_queue();
+        if (NULL == node_p) {
+            break;
+        }
+        if (node_p->type == NODE_TYPE_VIDEO && node_p->flag != NODE_FLAG_CODEC_CONFIG) {
+//            mp4Mux->writeH264data((uint8_t *) node_p->data, node_p->size);
+            mp4Encoder->WriteH264Data(mp4FileHandle, (uint8_t *)node_p->data, node_p->size);
+        }
+        free(node_p);
+    }
+    mp4Encoder->CloseMP4File(mp4FileHandle);
+    delete mp4Encoder;
+//    delete mp4Mux;
+    gvm->DetachCurrentThread();
+    return NULL;
+}
 void release(JNIEnv *env, jobject instance) {
     rtmp_destroy();
+    SRS_LOGE("delete mp4Mux---");
+//    delete mp4Encoder;
 //    delete audioRecordEngine;
 }
 
@@ -108,13 +169,13 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
         return JNI_ERR;
     }
 
-    jclass clz = jenv->FindClass( JNI_CLS_MANAGER);
+    jclass clz = jenv->FindClass(JNI_CLS_MANAGER);
     if (clz == NULL) {
         SRS_LOGE("JNI_OnLoad:Class %s not found", JNI_CLS_MANAGER);
         return JNI_ERR;
     }
 
-    if (jenv->RegisterNatives( clz, srs_methods, SRS_ARRAY_ELEMS(srs_methods))) {
+    if (jenv->RegisterNatives(clz, srs_methods, SRS_ARRAY_ELEMS(srs_methods))) {
         SRS_LOGE("methods not registered");
         return JNI_ERR;
     }
@@ -131,12 +192,12 @@ JNIEXPORT void JNI_OnUnload(JavaVM *vm, void *reserved) {
         SRS_LOGE("Env not got");
         return;
     }
-    jclass clz = jenv->FindClass( JNI_CLS_MANAGER);
+    jclass clz = jenv->FindClass(JNI_CLS_MANAGER);
     if (clz == NULL) {
         SRS_LOGE("JNI_OnUnload:Class %s not found", JNI_CLS_MANAGER);
         return;
     }
-    jenv->UnregisterNatives( clz);
+    jenv->UnregisterNatives(clz);
 }
 
 };

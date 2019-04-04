@@ -17,15 +17,16 @@ extern "C"
 #endif
 
 typedef struct mediaConfig {
-    double framerate;
-    double videodatarate;
-    double width;
-    double height;
-    double audiodatarate;
-    double audiosamplerate;
-    double audiosamplesize;
+    uint32_t framerate;
+    uint32_t videodatarate;
+    uint32_t width;
+    uint32_t height;
+    uint32_t audiodatarate;
+    uint32_t audiosamplerate;
+    uint32_t audiosamplesize;
     int32_t channel_count;
 } media_config;
+media_config *media_config_p;
 
 int init_srs(const char *url);
 
@@ -39,21 +40,21 @@ void rtmp_start(JavaVM *gVm);
 
 void rtmp_destroy();
 
-void set_framerate(double framerate);
+void set_framerate(uint32_t framerate);
 
-void set_videodatarate(double videodatarate);
+void set_videodatarate(uint32_t videodatarate);
 
-void set_width(double width);
+void set_width(uint32_t width);
 
-void set_height(double height);
+void set_height(uint32_t height);
 
-void set_audiodatarate(double audiodatarate);
+void set_audiodatarate(uint32_t audiodatarate);
 
 void set_audiochannel(int32_t);
 
-void set_audiosamplerate(double audiosamplerate);
+void set_audiosamplerate(uint32_t audiosamplerate);
 
-void set_audiosamplesize(double audiosamplesize);
+void set_audiosamplesize(uint32_t audiosamplesize);
 
 #ifdef __cplusplus
 };

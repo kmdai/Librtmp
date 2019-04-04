@@ -26,9 +26,16 @@ using Mp4Context=struct _mp4_context;
 
 class Mp4Mux {
 public:
+    Mp4Mux();
     ~Mp4Mux();
 
     void setMp4Context(Mp4Context *mp4Context);
+
+    bool initMp4File(std::string path);
+
+    bool writeH264data(uint8_t *data, uint32_t len);
+
+    bool writeAACdata(uint8_t *data, uint32_t len);
 
 private:
     Mp4Context *mMp4Context;
@@ -36,12 +43,6 @@ private:
     uint32_t mTimeScale = 9000;
     MP4TrackId mVideoTrackId;
     MP4TrackId mAudioTrackId;
-
-    bool initMp4File(std::string path);
-
-    bool writeH264data(uint8_t *data, uint32_t len, bool isIFrame);
-
-    bool writeAACdata(uint8_t *data, uint32_t len, bool isIFrame);
 };
 
 

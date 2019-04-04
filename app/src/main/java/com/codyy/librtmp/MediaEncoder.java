@@ -356,8 +356,7 @@ public class MediaEncoder implements android.os.Handler.Callback {
             mSRSLibrtmpManager.setHeight(m_height);
             mSRSLibrtmpManager.setWidth(m_width);
             mSRSLibrtmpManager.setVideodatarate(mBitrate);
-            mSRSLibrtmpManager.setAudiodatarate(29);
-            mSRSLibrtmpManager.setAudiosamplerate(44100);
+            mSRSLibrtmpManager.setAudiosamplerate(AUDIO_SAMPLE_RATE);
             mSRSLibrtmpManager.setAudiosamplesize(16);
             mHandler.sendEmptyMessage(START_PUSH);
             MediaCodec.BufferInfo bufferInfo = new MediaCodec.BufferInfo();

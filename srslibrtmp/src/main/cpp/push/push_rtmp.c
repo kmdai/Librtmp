@@ -8,7 +8,6 @@
 #include <sys/prctl.h>
 
 srs_rtmp_t srs_rtmp;
-media_config *media_config_p;
 
 int init_srs(const char *url) {
     srs_rtmp = srs_rtmp_create(url);
@@ -109,31 +108,31 @@ void rtmp_start(JavaVM *gVm) {
     pthread_setname_np(pthread, "rtmp push data");
 }
 
-void set_framerate(double framerate) {
+void set_framerate(uint32_t framerate) {
     if (media_config_p) {
         media_config_p->framerate = framerate;
     }
 }
 
-void set_videodatarate(double videodatarate) {
+void set_videodatarate(uint32_t videodatarate) {
     if (media_config_p) {
         media_config_p->videodatarate = videodatarate;
     }
 }
 
-void set_width(double width) {
+void set_width(uint32_t width) {
     if (media_config_p) {
         media_config_p->width = width;
     }
 }
 
-void set_height(double height) {
+void set_height(uint32_t height) {
     if (media_config_p) {
         media_config_p->height = height;
     }
 }
 
-void set_audiodatarate(double audiodatarate) {
+void set_audiodatarate(uint32_t audiodatarate) {
     if (media_config_p) {
         media_config_p->audiodatarate = audiodatarate;
     }
@@ -145,13 +144,13 @@ void set_audiochannel(int32_t channel) {
     }
 }
 
-void set_audiosamplerate(double audiosamplerate) {
+void set_audiosamplerate(uint32_t audiosamplerate) {
     if (media_config_p) {
         media_config_p->audiosamplerate = audiosamplerate;
     }
 }
 
-void set_audiosamplesize(double audiosamplesize) {
+void set_audiosamplesize(uint32_t audiosamplesize) {
     if (media_config_p) {
         media_config_p->audiosamplesize = audiosamplesize;
     }

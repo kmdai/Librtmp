@@ -93,18 +93,18 @@ char *put_64byte(char *c, double d) {
     return c + 8;
 }
 
-int find_sps_pps_pos(char *data, int size, int offset) {
+int find_sps_pps_pos(char *data, int size, int offset, uint32_t *prefix) {
     int pos = offset;
     while (pos < size) {
         if (data[pos++] == 0x00 && data[pos++] == 0x00) {
             if (data[pos++] == 0x01) {
-                prefix = 3;
+                *prefix = 3;
                 return pos;
             } else {
                 //计数回退
                 pos--;
                 if (data[pos++] == 0x00 && data[pos++] == 0x01) {
-                    prefix = 4;
+                    *prefix = 4;
                     return pos;
                 }
             }
@@ -200,8 +200,8 @@ int create_MetaData(char **data, double framerate, double videodatarate, double 
 int create_AVCVideoPacket(char **data, char *sps_pps, int size) {
     int spsS = 0;
     int ppsS = 0;
-    spsS = find_sps_pps_pos(sps_pps, size, 0);
-    ppsS = find_sps_pps_pos(sps_pps, size, spsS);
+    spsS = find_sps_pps_pos(sps_pps, size, 0, &prefix);
+    ppsS = find_sps_pps_pos(sps_pps, size, spsS, &prefix);
     int spsLen = ppsS - spsS - prefix;
     int ppsLen = size - ppsS;
 

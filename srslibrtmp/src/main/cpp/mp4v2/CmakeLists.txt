@@ -16,7 +16,6 @@ message("------------------------------Cmake build ${lib_name}------------------
 message("project source dir==>${PROJECT_SOURCE_DIR}")
 message("Cmake file dir==>${CMAKE_CURRENT_SOURCE_DIR}")
 
-#查找目录下所有的源文件，并保存在指定变量ly_source_files中,遗憾的是它不能像File递归查找
 aux_source_directory(src source_files)
 aux_source_directory(src/bmff source_files)
 aux_source_directory(src/itmf source_files)
@@ -41,7 +40,7 @@ foreach (_var ${source_files})
 endforeach ()
 
 
-set_property(SOURCE ${source_files} APPEND_STRING PROPERTY COMPILE_FLAGS " -mfpu=neon")
+set_property(SOURCE ${source_files} APPEND_STRING PROPERTY COMPILE_FLAGS " ")
 
 # include目录  AFTER OR BEFORE 表示添加在之前还是之后,SYSTEM表示系统包含目录
 # https://cmake.org/cmake/help/latest/command/include_directories.html
