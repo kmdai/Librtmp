@@ -21,7 +21,6 @@ set(media
         media/MediaEncoder.cpp
         media/AudioRecordEngine.cpp
         media/Mp4Mux.cpp
-        media/MP4Encoder.cpp
         jni_bridge.cpp)
 
 add_library(ndkmedia SHARED ${media})

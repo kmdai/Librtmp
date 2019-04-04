@@ -35,6 +35,12 @@ int init_srs(const char *url) {
 
 void rtmp_destroy() {
     free(media_config_p);
+    if (media_config_p->sps) {
+        free(media_config_p->sps);
+    }
+    if (media_config_p->pps) {
+        free(media_config_p->sps);
+    }
     cancel_queue();
     //销毁队列
 //    destroy_queue();

@@ -3,79 +3,77 @@
 //
 
 #include "Mp4Mux.h"
+#include "android/log.h"
 
-void Mp4Mux::setMp4Context(Mp4Context *mp4Context) {
-    this->mMp4Context = mp4Context;
-}
-
-bool Mp4Mux::initMp4File(std::string path) {
-    mFilehandle = MP4Create(path.data());
-    if (mFilehandle == MP4_INVALID_FILE_HANDLE)return false;
-    if (!MP4SetTimeScale(mFilehandle, 90000)) return false;
-    if (mMp4Context) {
-        mVideoTrackId = MP4AddH264VideoTrack(mFilehandle,
-                                             90000,
-                                             90000 / mMp4Context->frame_rate,
-                                             mMp4Context->width,
-                                             mMp4Context->height,
-                                             mMp4Context->sps[1],
-                                             mMp4Context->sps[2],
-                                             mMp4Context->sps[3],
-                                             3);
-//        mAudioTrackId = MP4AddAudioTrack(mFilehandle, mMp4Context->simple_rate, 1024,
-//                                         MP4_MPEG4_AUDIO_TYPE);
-        MP4SetVideoProfileLevel(mFilehandle, 0x01);
-        if (mVideoTrackId == MP4_INVALID_TRACK_ID) {
-            SRS_LOGE("mVideoTrackId==MP4_INVALID_TRACK_ID");
-            return false;
-        }
-        if (mAudioTrackId == MP4_INVALID_TRACK_ID) {
-            SRS_LOGE("mAudioTrackId==MP4_INVALID_TRACK_ID");
-            return false;
-        }
-        MP4AddH264SequenceParameterSet(mFilehandle, mVideoTrackId, mMp4Context->sps,
-                                       mMp4Context->sps_len);
-        MP4AddH264PictureParameterSet(mFilehandle, mVideoTrackId, mMp4Context->pps,
-                                      mMp4Context->pps_len);
-
-//        MP4SetAudioProfileLevel(mFilehandle, 0x02);
-        return true;
-    }
-    return false;
-}
-
-bool Mp4Mux::writeH264data(uint8_t *data, uint32_t size) {
-    if (mFilehandle == MP4_INVALID_FILE_HANDLE)return false;
-    if (mMp4Context->sampleLenFieldSizeMinusOne > 4) {
-        SRS_LOGE("mMp4Context->sampleLenFieldSizeMinusOne>4");
-        mMp4Context->sampleLenFieldSizeMinusOne = 4;
-    }
-    uint32_t nlu_size = size - mMp4Context->sampleLenFieldSizeMinusOne;
-    int i = 0;
-//    while (i < mMp4Context->sampleLenFieldSizeMinusOne) {
-//        data[i] = nlu_size >> (8 * (mMp4Context->sampleLenFieldSizeMinusOne - i++));
-//    }
-    data[0] = nlu_size >> 24;
-    data[1] = nlu_size >> 16;
-    data[2] = nlu_size >> 8;
-    data[3] = nlu_size & 0xff;
-    MP4WriteSample(mFilehandle, mVideoTrackId, data, size, MP4_INVALID_DURATION, 0,
-                   data[4] & 0x1f == 0x05);
-}
-
-bool Mp4Mux::writeAACdata(uint8_t *data, uint32_t len) {
-//    MP4WriteSample(mFilehandle, mAudioTrackId, data, len, MP4_INVALID_DURATION);
-    return false;
-}
-
-Mp4Mux::~Mp4Mux() {
-    SRS_LOGE("~Mp4Mux-------");
-    MP4Close(mFilehandle);
-//    if (mMp4Context) {
-//        delete mMp4Context;
-//    }
-}
+#define  LOG_TAG    "Mp4Mux.cpp"
+#define LOGI(...) __android_log_print(ANDROID_LOG_INFO,LOG_TAG,__VA_ARGS__);
 
 Mp4Mux::Mp4Mux() {
 
+}
+
+Mp4Mux::~Mp4Mux() {
+
+}
+
+
+MP4FileHandle
+Mp4Mux::initMp4File(const char *pFileName, uint32_t timeScale, uint32_t width, uint32_t height,
+                    uint32_t framerate, uint32_t samplerate) {
+    MP4FileHandle fileHandle = MP4Create(pFileName);
+    mTimeScale = timeScale;
+    mWidth = width;
+    mHeight = height;
+    mFramerate = framerate;
+    mSimpleRate = samplerate;
+    MP4SetTimeScale(fileHandle, mTimeScale);
+    if (fileHandle != MP4_INVALID_FILE_HANDLE) {
+        return fileHandle;
+    }
+    return nullptr;
+}
+
+bool Mp4Mux::writeH264data(MP4FileHandle mp4File, uint8_t *data, uint32_t len) {
+    LOGI("nalu.type: %d", data[4] & 0x1f);
+    int dsize = len - 4;
+    data[0] = dsize >> 24;
+    data[1] = dsize >> 16;
+    data[2] = dsize >> 8;
+    data[3] = dsize & 0xff;
+    if (!MP4WriteSample(mp4File, mVideoTrackId, data, len, MP4_INVALID_DURATION, 0,
+                        true)) {
+        return false;
+    }
+    return true;
+}
+
+bool Mp4Mux::cole(MP4FileHandle mp4File) {
+    MP4Close(mp4File);
+    return false;
+}
+
+void Mp4Mux::addSPSPPS(MP4FileHandle hMp4File, uint8_t *sps, uint32_t sps_len, uint8_t *pps,
+                       uint32_t pps_len) {
+    if (hMp4File == MP4_INVALID_FILE_HANDLE) {
+        return;
+    }
+    mVideoTrackId = MP4AddH264VideoTrack(hMp4File, mTimeScale, mTimeScale / mFramerate,
+                                         mWidth,
+                                         mHeight,
+                                         sps[1], // sps[1] AVCProfileIndication
+                                         sps[2], // sps[2] profile_compat
+                                         sps[3], // sps[3] AVCLevelIndication
+                                         3);
+    MP4SetVideoProfileLevel(hMp4File, 0x08); //  Simple Profile @ Level 3    1
+    MP4AddH264SequenceParameterSet(hMp4File, mVideoTrackId, sps, sps_len);
+    MP4AddH264PictureParameterSet(hMp4File, mVideoTrackId, pps, pps_len);
+}
+
+void Mp4Mux::SetTrackESConfiguration(MP4FileHandle hMp4File, uint8_t *config, uint32_t conf_len) {
+    mAudioTrackId = MP4AddAudioTrack(hMp4File, mSimpleRate, 1024, MP4_MPEG4_AUDIO_TYPE);
+    MP4SetTrackESConfiguration(hMp4File, mAudioTrackId, config, conf_len);
+}
+
+bool Mp4Mux::writeAACdata(MP4FileHandle mp4File, uint8_t *data, uint32_t len) {
+    return false;
 }

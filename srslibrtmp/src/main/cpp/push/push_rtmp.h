@@ -25,6 +25,10 @@ typedef struct mediaConfig {
     uint32_t audiosamplerate;
     uint32_t audiosamplesize;
     int32_t channel_count;
+    uint8_t *sps;
+    uint32_t sps_len;
+    uint8_t *pps;
+    uint32_t pps_len;
 } media_config;
 media_config *media_config_p;
 
