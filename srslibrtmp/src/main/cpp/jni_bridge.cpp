@@ -39,34 +39,11 @@ void addFrame(JNIEnv *env, jobject instance, jbyteArray data, jint size, jint ty
               jint time) {
     jbyte *chunk = env->GetByteArrayElements(data, NULL);
     q_node_p node = create_node((char *) chunk, size, (node_type) type, flag, time);
-
-    if (node->type == NODE_TYPE_VIDEO && node->flag == NODE_FLAG_CODEC_CONFIG) {
-        uint32_t prefix = 0;
-        int start = find_sps_pps_pos(node->data, node->size, 0, &prefix);
-        int p_start = find_sps_pps_pos(node->data, node->size, start, &prefix);
-        media_config_p->sps_len = p_start - start - prefix;
-        media_config_p->pps_len = node->size - p_start;
-        media_config_p->sps = (uint8_t *) malloc(media_config_p->sps_len);
-        media_config_p->pps = (uint8_t *) malloc(media_config_p->pps_len);
-        memcpy(media_config_p->sps, node->data + start, media_config_p->sps_len);
-        memcpy(media_config_p->pps, node->data + p_start, media_config_p->pps_len);
-        if (mp4FileHandle == MP4_INVALID_FILE_HANDLE) {
-            mp4FileHandle = mp4Mux->initMp4File("/sdcard/DCIM/100ANDRO/test_4.mp4", 90000,
-                                                media_config_p->width, media_config_p->height,
-                                                media_config_p->framerate, 44100);
-        }
-
-        mp4Mux->addSPSPPS(mp4FileHandle, media_config_p->sps, media_config_p->sps_len,
-                          media_config_p->pps,
-                          media_config_p->pps_len);
-    }
-    if (node->type == NODE_TYPE_AUDIO && node->flag == NODE_FLAG_CODEC_CONFIG) {
-        if (mp4FileHandle == MP4_INVALID_FILE_HANDLE) {
-            mp4FileHandle = mp4Mux->initMp4File("/sdcard/DCIM/100ANDRO/test_3.mp4", 90000,
-                                                media_config_p->width, media_config_p->height,
-                                                media_config_p->framerate, 44100);
-        }
-        mp4Mux->SetTrackESConfiguration(mp4FileHandle, (uint8_t *) node->data, node->size);
+    if (node->flag == NODE_FLAG_CODEC_CONFIG && mp4FileHandle == MP4_INVALID_FILE_HANDLE) {
+        mp4FileHandle = mp4Mux->initMp4File("/sdcard/DCIM/100ANDRO/test_10.mp4", 90000,
+                                            media_config_p->width, media_config_p->height,
+                                            media_config_p->framerate,
+                                            media_config_p->audiosamplerate);
     }
     in_queue(node);
     env->ReleaseByteArrayElements(data, chunk, 0);
@@ -78,16 +55,31 @@ void *mux(void *gVm) {
     if (0 != gvm->AttachCurrentThread(&env, NULL)) {
         return (void *) 0;
     }
-    sleep(500);
     for (;;) {
         q_node_p node_p = out_queue();
         if (NULL == node_p) {
             break;
         }
-        if (node_p->type == NODE_TYPE_VIDEO && node_p->flag != NODE_FLAG_CODEC_CONFIG) {
-            mp4Mux->writeH264data(mp4FileHandle, (uint8_t *) node_p->data, node_p->size);
-        } else  if (node_p->type == NODE_TYPE_AUDIO){
-            mp4Mux->writeAACdata(mp4FileHandle,(uint8_t *) node_p->data, node_p->size);
+        if (node_p->type == NODE_TYPE_VIDEO) {
+            if (node_p->flag == NODE_FLAG_CODEC_CONFIG) {
+                uint32_t prefix = 0;
+                int start = find_sps_pps_pos(node_p->data, node_p->size, 0, &prefix);
+                int p_start = find_sps_pps_pos(node_p->data, node_p->size, start, &prefix);
+                mp4Mux->writeH264data(mp4FileHandle, (uint8_t *) node_p->data, p_start - prefix,
+                                      node_p->time);
+                mp4Mux->writeH264data(mp4FileHandle, (uint8_t *) (node_p->data + p_start - prefix),
+                                      node_p->size - p_start + prefix, node_p->time);
+            } else {
+                mp4Mux->writeH264data(mp4FileHandle, (uint8_t *) node_p->data, node_p->size,
+                                      node_p->time);
+            }
+        } else if (node_p->type == NODE_TYPE_AUDIO) {
+            if (node_p->flag == NODE_FLAG_CODEC_CONFIG) {
+                mp4Mux->addTrackESConfiguration(mp4FileHandle, (uint8_t *) node_p->data,
+                                                node_p->size);
+            } else {
+                mp4Mux->writeAACdata(mp4FileHandle, (uint8_t *) node_p->data, node_p->size);
+            }
         }
         free(node_p);
     }
