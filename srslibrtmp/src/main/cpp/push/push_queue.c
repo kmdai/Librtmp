@@ -36,8 +36,8 @@ void check_length() {
     if (queue->length >= QUEUE_MAX_LENGTH) {
         q_node_p node = queue->front;
         int before = queue->length;
-        while (node->flag != NODE_FLAG_KEY_FRAME ||
-               queue->length >= QUEUE_MAX_LENGTH) {
+        while (node != NULL && (node->flag != NODE_FLAG_KEY_FRAME ||
+                                queue->length >= QUEUE_MAX_LENGTH)) {
             queue->front = node->next;
             queue->length -= node->size;
             free(node);
@@ -48,7 +48,7 @@ void check_length() {
 }
 
 int in_queue(q_node_p node) {
-    if (queue) {
+    if (queue && !cancel) {
         pthread_mutex_lock(&queue->mutex);
         if (queue->front == NULL && queue->rear == NULL) {
             queue->front = queue->rear = node;
@@ -62,6 +62,7 @@ int in_queue(q_node_p node) {
         pthread_mutex_unlock(&queue->mutex);
         return 0;
     }
+    free(node);
     return 1;
 }
 
@@ -79,6 +80,9 @@ q_node_p out_queue() {
             pthread_cond_wait(&queue->cond, &queue->mutex);
         }
         node = queue->front;
+        if (node == NULL) {
+            SRS_LOGE("queue->front==NULL");
+        }
         queue->front = queue->front->next;
         if (queue->front == NULL) {
             queue->rear = NULL;

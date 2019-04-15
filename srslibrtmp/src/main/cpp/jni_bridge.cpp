@@ -23,13 +23,13 @@ jboolean setUrl(JNIEnv *env, jobject instance, jstring url) {
     const char *rtmp_url = env->GetStringUTFChars(url, 0);
     int result = init_srs(rtmp_url);
     if (result != 0) {
-//        rtmp_start(javaVM);
-        mp4Mux = new Mp4Mux();
-        pthread_t pthread;
-        pthread_attr_t attr;
-        pthread_attr_init(&attr);
+        rtmp_start(javaVM);
+//        mp4Mux = new Mp4Mux();
+//        pthread_t pthread;
+//        pthread_attr_t attr;
+//        pthread_attr_init(&attr);
 
-        pthread_create(&pthread, &attr, mux, javaVM);
+//        pthread_create(&pthread, &attr, mux, javaVM);
     }
     env->ReleaseStringUTFChars(url, rtmp_url);
     return result != 0 ? JNI_TRUE : JNI_FALSE;
@@ -39,12 +39,12 @@ void addFrame(JNIEnv *env, jobject instance, jbyteArray data, jint size, jint ty
               jint time) {
     jbyte *chunk = env->GetByteArrayElements(data, NULL);
     q_node_p node = create_node((char *) chunk, size, (node_type) type, flag, time);
-    if (node->flag == NODE_FLAG_CODEC_CONFIG && mp4FileHandle == MP4_INVALID_FILE_HANDLE) {
-        mp4FileHandle = mp4Mux->initMp4File("/sdcard/DCIM/100ANDRO/test_10.mp4", 90000,
-                                            media_config_p->width, media_config_p->height,
-                                            media_config_p->framerate,
-                                            media_config_p->audiosamplerate);
-    }
+//    if (node->flag == NODE_FLAG_CODEC_CONFIG && mp4FileHandle == MP4_INVALID_FILE_HANDLE) {
+//        mp4FileHandle = mp4Mux->initMp4File("/sdcard/DCIM/100ANDRO/test_21.mp4", 90000,
+//                                            media_config_p->width, media_config_p->height,
+//                                            media_config_p->framerate,
+//                                            media_config_p->audiosamplerate);
+//    }
     in_queue(node);
     env->ReleaseByteArrayElements(data, chunk, 0);
 }
@@ -55,6 +55,8 @@ void *mux(void *gVm) {
     if (0 != gvm->AttachCurrentThread(&env, NULL)) {
         return (void *) 0;
     }
+    q_node_p node_first = NULL;
+    uint32_t frame_duration = 0;
     for (;;) {
         q_node_p node_p = out_queue();
         if (NULL == node_p) {
@@ -70,8 +72,16 @@ void *mux(void *gVm) {
                 mp4Mux->writeH264data(mp4FileHandle, (uint8_t *) (node_p->data + p_start - prefix),
                                       node_p->size - p_start + prefix, node_p->time);
             } else {
-                mp4Mux->writeH264data(mp4FileHandle, (uint8_t *) node_p->data, node_p->size,
-                                      node_p->time);
+                if (node_first == NULL) {
+                    node_first = node_p;
+                    continue;
+                }
+                frame_duration = node_p->time - node_first->time;
+                mp4Mux->writeH264data(mp4FileHandle, (uint8_t *) node_first->data, node_first->size,
+                                      frame_duration);
+                free(node_first);
+                node_first = node_p;
+                continue;
             }
         } else if (node_p->type == NODE_TYPE_AUDIO) {
             if (node_p->flag == NODE_FLAG_CODEC_CONFIG) {
@@ -82,6 +92,9 @@ void *mux(void *gVm) {
             }
         }
         free(node_p);
+    }
+    if(node_first!=NULL){
+        free(node_first);
     }
     mp4Mux->cole(mp4FileHandle);
     delete mp4Mux;

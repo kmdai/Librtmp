@@ -1,5 +1,7 @@
 package com.codyy.librtmp;
 
+import android.annotation.TargetApi;
+import android.graphics.Bitmap;
 import android.media.AudioFormat;
 import android.media.AudioRecord;
 import android.media.MediaCodec;
@@ -14,6 +16,7 @@ import android.text.TextUtils;
 import android.util.Log;
 import android.view.Surface;
 
+import com.codyy.librtmp.glec.EGLRender;
 import com.kmdai.rtmppush.LibrtmpManager;
 import com.kmdai.srslibrtmp.SRSLibrtmpManager;
 
@@ -28,7 +31,7 @@ import java.util.concurrent.locks.ReentrantLock;
 import static android.media.MediaCodec.BUFFER_FLAG_CODEC_CONFIG;
 
 
-public class MediaEncoder implements android.os.Handler.Callback {
+public class MediaEncoder implements android.os.Handler.Callback, EGLRender.onFrameCallBack {
     public final static int START_PUSH = 0x04;
     private MediaCodec mVideoMediaCodec;
     private MediaCodec mAudioCodec;
@@ -42,20 +45,21 @@ public class MediaEncoder implements android.os.Handler.Callback {
     private Surface mSurface;
     private double mFrameRate;
     private int mBitrate;
-    private final int TIMEOUT_US = 1000000000;
+    private final int TIMEOUT_US = 1000;
 
     private final int AUDIO_SAMPLE_RATE = 44100;
     private final int AUDIO_BIT_RATE = 96000;
     private final int AUDIO_CHANNEL_COUNT = 1;
     private Handler mHandler;
     AtomicBoolean mIsStop = new AtomicBoolean(false);
-    //        private LibrtmpManager mLibrtmpManager;
+    //            private LibrtmpManager mLibrtmpManager;
     private String mRtmpUrl = "rtmp://10.23.164.30:1935/srs/kmdai";
     //                RTMPMuxer mRTMPMuxer;
     long indexTime = 0;
     private SRSLibrtmpManager mSRSLibrtmpManager;
-    //        private LibrtmpManager mSRSLibrtmpManager;
+    //            private LibrtmpManager mSRSLibrtmpManager;
     private int mMiniAudioBufferSize;
+    EGLRender mEGLRender;
 
     public MediaEncoder(int width, int height, int framerate, int bitrate) {
         if (mIsStop.get()) {
@@ -103,6 +107,8 @@ public class MediaEncoder implements android.os.Handler.Callback {
         }
         mVideoMediaCodec.configure(mediaFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
         mSurface = mVideoMediaCodec.createInputSurface();
+        mEGLRender = new EGLRender(mSurface, m_width, m_height, (int) mFrameRate);
+        mEGLRender.setCallBack(this);
         audioInit();
         mVideoMediaCodec.start();
 //        mSRSLibrtmpManager.openAudioRecord();
@@ -114,6 +120,15 @@ public class MediaEncoder implements android.os.Handler.Callback {
      *
      */
     private void audioInit() {
+        //最小的缓冲区
+        mMiniAudioBufferSize = AudioRecord.getMinBufferSize(AUDIO_SAMPLE_RATE,
+                AudioFormat.CHANNEL_IN_MONO,
+                AudioFormat.ENCODING_PCM_16BIT);
+        mAudioRecord = new AudioRecord(MediaRecorder.AudioSource.MIC,
+                AUDIO_SAMPLE_RATE,
+                AudioFormat.CHANNEL_IN_MONO,
+                AudioFormat.ENCODING_PCM_16BIT,
+                mMiniAudioBufferSize);
         MediaFormat mediaFormat = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_AAC, AUDIO_SAMPLE_RATE, AUDIO_CHANNEL_COUNT);
         MediaCodecList mediaCodecList = new MediaCodecList(MediaCodecList.REGULAR_CODECS);
         MediaCodecInfo[] mediaCodecInfos = mediaCodecList.getCodecInfos();
@@ -135,31 +150,37 @@ public class MediaEncoder implements android.os.Handler.Callback {
         mediaFormat.setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AACObjectLC);
         mediaFormat.setInteger(MediaFormat.KEY_CHANNEL_COUNT, AUDIO_CHANNEL_COUNT);
         mediaFormat.setInteger(MediaFormat.KEY_SAMPLE_RATE, AUDIO_SAMPLE_RATE);
-//        mediaFormat.setInteger(MediaFormat.KEY_PCM_ENCODING, AudioFormat.ENCODING_PCM_16BIT);
+        mediaFormat.setInteger(MediaFormat.KEY_PCM_ENCODING, AudioFormat.ENCODING_PCM_16BIT);
+        mediaFormat.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, mMiniAudioBufferSize);
         mediaFormat.setInteger(MediaFormat.KEY_BIT_RATE, AUDIO_BIT_RATE);
 
         mAudioCodec.configure(mediaFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
 
-        //最小的缓冲区
-        mMiniAudioBufferSize = AudioRecord.getMinBufferSize(AUDIO_SAMPLE_RATE,
-                AudioFormat.CHANNEL_IN_MONO,
-                AudioFormat.ENCODING_PCM_16BIT);
-        mAudioRecord = new AudioRecord(MediaRecorder.AudioSource.MIC,
-                AUDIO_SAMPLE_RATE,
-                AudioFormat.CHANNEL_IN_MONO,
-                AudioFormat.ENCODING_PCM_16BIT,
-                mMiniAudioBufferSize);
+
     }
+
+    boolean isStart = false;
+
 
     @Override
     public boolean handleMessage(Message msg) {
         if (msg.what == START_PUSH) {
+            isStart = true;
             new Thread(new RecordRunnable()).start();
             new Thread(new RecordEncodec()).start();
 //            new Thread(new RecordDecodec()).start();
             return true;
         }
         return false;
+    }
+
+    @Override
+    public void onUpdate() {
+    }
+
+    @Override
+    public void onCutScreen(Bitmap bitmap) {
+
     }
 
     public class RecordRunnable implements Runnable {
@@ -174,12 +195,14 @@ public class MediaEncoder implements android.os.Handler.Callback {
                 if (mIsStop.get()) {
                     return;
                 }
+
                 byte[] data = new byte[mMiniAudioBufferSize];
                 int length = mAudioRecord.read(data, 0, data.length);
                 if (length == mMiniAudioBufferSize) {
                     PCM pcm = new PCM();
                     pcm.data = data;
-                    pcm.time = PCM.currentTime();
+                    pcm.time = pcm.currentTime();
+                    Log.d("----", "pcm-time" + pcm.time);
                     addPCM(pcm);
                 } else {
                     switch (length) {
@@ -208,23 +231,24 @@ public class MediaEncoder implements android.os.Handler.Callback {
             for (; ; ) {
                 mLock.lock();
                 PCM pcm = null;
+                if (mIsStop.get()) {
+                    mAudioCodec.stop();
+                    mAudioCodec.release();
+                    mLock.unlock();
+                    mAudioRecord.stop();
+                    Log.d("---", "mAudioRecord:release");
+                    return;
+                }
                 while (mPCMS.size() == 0) {
                     try {
                         mCondition.await();
                     } catch (InterruptedException e) {
                         e.printStackTrace();
                     }
-                    if (mIsStop.get()) {
-                        mAudioCodec.stop();
-                        mAudioCodec.release();
-                        mLock.unlock();
-                        mAudioRecord.stop();
-                        Log.d("---", "mAudioRecord:release");
-                        return;
-                    }
                 }
                 pcm = mPCMS.poll();
                 mLock.unlock();
+                Log.d("----", "pcm-length--" + pcm.data.length);
                 int inputId = mAudioCodec.dequeueInputBuffer(TIMEOUT_US);
                 if (inputId >= 0) {
                     ByteBuffer inputBuffer = mAudioCodec.getInputBuffer(inputId);
@@ -234,7 +258,7 @@ public class MediaEncoder implements android.os.Handler.Callback {
                     mAudioCodec.queueInputBuffer(inputId, 0, pcm.data.length, pcm.time, 0);
                 }
                 int outputBufferId = mAudioCodec.dequeueOutputBuffer(bufferInfo, TIMEOUT_US);
-                if (outputBufferId >= 0) {
+                while (outputBufferId >= 0) {
                     ByteBuffer outputBuffer = mAudioCodec.getOutputBuffer(outputBufferId);
                     if (outputBuffer != null) {
                         outputBuffer.position(bufferInfo.offset);
@@ -253,6 +277,7 @@ public class MediaEncoder implements android.os.Handler.Callback {
                         outputBuffer.clear();
                     }
                     mAudioCodec.releaseOutputBuffer(outputBufferId, false);
+                    outputBufferId = mAudioCodec.dequeueOutputBuffer(bufferInfo, TIMEOUT_US);
                 }
             }
         }
@@ -324,15 +349,18 @@ public class MediaEncoder implements android.os.Handler.Callback {
     }
 
     public Surface getSurface() {
-        return mSurface;
+        return mEGLRender.getDecodeSurface();
+//        return mSurface;
     }
 
 
     public void close() {
+        isStart = false;
         mIsStop.set(true);
         mLock.lock();
         mCondition.signal();
         mLock.unlock();
+        mEGLRender.stop();
     }
 
     public void start(String url) {
@@ -340,6 +368,7 @@ public class MediaEncoder implements android.os.Handler.Callback {
             mRtmpUrl = url;
         }
         new Thread(new SendRunable()).start();
+
     }
 
     public class SendRunable implements Runnable {
@@ -359,6 +388,7 @@ public class MediaEncoder implements android.os.Handler.Callback {
             mSRSLibrtmpManager.setAudiosamplerate(AUDIO_SAMPLE_RATE);
             mSRSLibrtmpManager.setAudiosamplesize(16);
             mHandler.sendEmptyMessage(START_PUSH);
+            mEGLRender.start();
             MediaCodec.BufferInfo bufferInfo = new MediaCodec.BufferInfo();
             for (; ; ) {
                 if (mIsStop.get()) {
@@ -379,7 +409,7 @@ public class MediaEncoder implements android.os.Handler.Callback {
 //                        mLibrtmpManager.setSpsPps(outData, outData.length);
                         } else {
                             calcTotalTime(bufferInfo.presentationTimeUs / 1000);
-//                            Log.d("Frame----", "getTimeIndex()--" + getTimeIndex());
+                            Log.d("Frame----", "getTimeIndex()--" + getTimeIndex());
 //                        mLibrtmpManager.sendChunk(outData, outData.length, bufferInfo.flags, getTimeIndex());
 //                        time+=30;
                             mSRSLibrtmpManager.addFrame(outData, outData.length, SRSLibrtmpManager.NODE_TYPE_VIDEO, bufferInfo.flags, getTimeIndex());
@@ -387,6 +417,11 @@ public class MediaEncoder implements android.os.Handler.Callback {
                         outputBuffer.clear();
                     }
                     mVideoMediaCodec.releaseOutputBuffer(outputBufferId, false);
+                }
+                try {
+                    Thread.sleep(1000 / (int) mFrameRate);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
                 }
             }
             try {
@@ -440,11 +475,11 @@ public class MediaEncoder implements android.os.Handler.Callback {
         static long timeStart;
 
         public static void timeReset() {
-            timeStart = SystemClock.elapsedRealtimeNanos();
+            timeStart = 0;
         }
 
-        public static long currentTime() {
-            return (SystemClock.elapsedRealtimeNanos() - timeStart) / 1000;
+        public long currentTime() {
+            return timeStart = (1 * 1000 * 1000 / 44100) * (data.length / 2) + timeStart;
         }
     }
 }

@@ -66,7 +66,7 @@ bool Mp4Mux::writeH264data(MP4FileHandle mp4File, uint8_t *data, uint32_t len, u
             data[1] = dsize >> 16;
             data[2] = dsize >> 8;
             data[3] = dsize & 0xff;
-            uint32_t duration = (time - last_time) / 1000.0f * mTimeScale;
+            uint32_t duration = time / 1000.0f * mTimeScale;
             LOGI("duration=: %d", duration);
             if (!MP4WriteSample(mp4File, mVideoTrackId, data, len, duration, 0, true)) {
                 return false;
