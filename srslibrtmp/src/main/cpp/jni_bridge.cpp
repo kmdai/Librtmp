@@ -23,13 +23,13 @@ jboolean setUrl(JNIEnv *env, jobject instance, jstring url) {
     const char *rtmp_url = env->GetStringUTFChars(url, 0);
     int result = init_srs(rtmp_url);
     if (result != 0) {
-        rtmp_start(javaVM);
-//        mp4Mux = new Mp4Mux();
-//        pthread_t pthread;
-//        pthread_attr_t attr;
-//        pthread_attr_init(&attr);
+//        rtmp_start(javaVM);
+        mp4Mux = new Mp4Mux();
+        pthread_t pthread;
+        pthread_attr_t attr;
+        pthread_attr_init(&attr);
 
-//        pthread_create(&pthread, &attr, mux, javaVM);
+        pthread_create(&pthread, &attr, mux, javaVM);
     }
     env->ReleaseStringUTFChars(url, rtmp_url);
     return result != 0 ? JNI_TRUE : JNI_FALSE;
@@ -39,12 +39,12 @@ void addFrame(JNIEnv *env, jobject instance, jbyteArray data, jint size, jint ty
               jint time) {
     jbyte *chunk = env->GetByteArrayElements(data, NULL);
     q_node_p node = create_node((char *) chunk, size, (node_type) type, flag, time);
-//    if (node->flag == NODE_FLAG_CODEC_CONFIG && mp4FileHandle == MP4_INVALID_FILE_HANDLE) {
-//        mp4FileHandle = mp4Mux->initMp4File("/sdcard/DCIM/100ANDRO/test_21.mp4", 90000,
-//                                            media_config_p->width, media_config_p->height,
-//                                            media_config_p->framerate,
-//                                            media_config_p->audiosamplerate);
-//    }
+    if (node->flag == NODE_FLAG_CODEC_CONFIG && mp4FileHandle == MP4_INVALID_FILE_HANDLE) {
+        mp4FileHandle = mp4Mux->initMp4File("/sdcard/DCIM/100ANDRO/test_5.mp4", 90000,
+                                            media_config_p->width, media_config_p->height,
+                                            media_config_p->framerate,
+                                            media_config_p->audiosamplerate);
+    }
     in_queue(node);
     env->ReleaseByteArrayElements(data, chunk, 0);
 }
@@ -93,7 +93,7 @@ void *mux(void *gVm) {
         }
         free(node_p);
     }
-    if(node_first!=NULL){
+    if (node_first != NULL) {
         free(node_first);
     }
     mp4Mux->cole(mp4FileHandle);

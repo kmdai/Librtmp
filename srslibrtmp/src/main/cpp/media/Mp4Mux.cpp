@@ -68,7 +68,7 @@ bool Mp4Mux::writeH264data(MP4FileHandle mp4File, uint8_t *data, uint32_t len, u
             data[3] = dsize & 0xff;
             uint32_t duration = time / 1000.0f * mTimeScale;
             LOGI("duration=: %d", duration);
-            if (!MP4WriteSample(mp4File, mVideoTrackId, data, len, duration, 0, true)) {
+            if (!MP4WriteSample(mp4File, mVideoTrackId, data, len, duration, 0, type == 5)) {
                 return false;
             }
             last_time = time;
@@ -91,7 +91,7 @@ bool Mp4Mux::writeH264data(MP4FileHandle mp4File, uint8_t *data, uint32_t len, u
                                                  sps[3], // sps[3] AVCLevelIndication
                                                  3);
             if (mVideoTrackId == MP4_INVALID_TRACK_ID) return false;
-            MP4SetVideoProfileLevel(mp4File, 0x07);
+            MP4SetVideoProfileLevel(mp4File, 0x03);
             MP4AddH264SequenceParameterSet(mp4File, mVideoTrackId, sps, len - prefix);
             is_set_SPS = true;
             break;

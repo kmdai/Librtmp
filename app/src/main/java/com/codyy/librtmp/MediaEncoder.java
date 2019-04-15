@@ -95,8 +95,9 @@ public class MediaEncoder implements android.os.Handler.Callback, EGLRender.onFr
 //        mediaFormat.setInteger(MediaFormat.KEY_PROFILE, MediaCodecInfo.CodecProfileLevel.AVCProfileMain);
         mediaFormat.setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface);
         mediaFormat.setFloat(MediaFormat.KEY_FRAME_RATE, framerate);
+        mediaFormat.setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR);
         mediaFormat.setInteger(MediaFormat.KEY_BIT_RATE, bitrate);
-        mediaFormat.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 3);
+        mediaFormat.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1);
         mediaFormat.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 0);
 
         try {
@@ -202,7 +203,7 @@ public class MediaEncoder implements android.os.Handler.Callback, EGLRender.onFr
                     PCM pcm = new PCM();
                     pcm.data = data;
                     pcm.time = pcm.currentTime();
-                    Log.d("----", "pcm-time" + pcm.time);
+//                    Log.d("----", "pcm-time" + pcm.time);
                     addPCM(pcm);
                 } else {
                     switch (length) {
@@ -248,7 +249,7 @@ public class MediaEncoder implements android.os.Handler.Callback, EGLRender.onFr
                 }
                 pcm = mPCMS.poll();
                 mLock.unlock();
-                Log.d("----", "pcm-length--" + pcm.data.length);
+//                Log.d("----", "pcm-length--" + pcm.data.length);
                 int inputId = mAudioCodec.dequeueInputBuffer(TIMEOUT_US);
                 if (inputId >= 0) {
                     ByteBuffer inputBuffer = mAudioCodec.getInputBuffer(inputId);

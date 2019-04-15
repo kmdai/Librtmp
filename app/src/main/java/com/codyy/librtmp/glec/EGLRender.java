@@ -13,6 +13,7 @@ import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
 import android.os.Message;
+import android.os.SystemClock;
 import android.util.Log;
 import android.view.Surface;
 
@@ -49,6 +50,7 @@ public class EGLRender implements SurfaceTexture.OnFrameAvailableListener {
     private boolean mFrameAvailable = true;
     private onFrameCallBack callBack;
     private boolean hasCutScreen = false;
+    private int mPerFrameTime;
 
     private AtomicBoolean start = new AtomicBoolean(false);
     private long time = 0;
@@ -115,6 +117,7 @@ public class EGLRender implements SurfaceTexture.OnFrameAvailableListener {
     public EGLRender(Surface surface, int mWidth, int mHeight, int fps) {
         this.mWidth = mWidth;
         this.mHeight = mHeight;
+        mPerFrameTime = 1000 / fps;
         initFPs(fps);
         eglSetup(surface);
         makeCurrent();
@@ -286,10 +289,10 @@ public class EGLRender implements SurfaceTexture.OnFrameAvailableListener {
     }
 
     public void awaitNewImage() {
-//        if (mFrameAvailable) {
-//            mFrameAvailable = false;
-        mSurfaceTexture.updateTexImage();
-//        }
+        if (mFrameAvailable) {
+            mFrameAvailable = false;
+            mSurfaceTexture.updateTexImage();
+        }
     }
 
     public boolean swapBuffers() {
@@ -328,24 +331,25 @@ public class EGLRender implements SurfaceTexture.OnFrameAvailableListener {
     Runnable startRun = new Runnable() {
         @Override
         public void run() {
-            if (!start.get()) {
-                handler.removeCallbacks(this);
-                mHandlerThread.quitSafely();
-                return;
-            }
+            handler.postAtTime(this, SystemClock.uptimeMillis() + mPerFrameTime);
+
             makeCurrent(1);
             awaitNewImage();
             //todo 帧率控制
             drawImage();
             callBack.onUpdate();
-//            Log.d(TAG, "-----PresentationTime:" + computePresentationTimeNsec(count));
-            setPresentationTime(computePresentationTimeNsec(count++));
+            Log.d(TAG, "-----count:" + count + "time:" + mPerFrameTime * count++);
+//            setPresentationTime(computePresentationTimeNsec(count++));
             swapBuffers();
-            if (hasCutScreen) {
-                getScreen();
-                hasCutScreen = false;
+//            if (hasCutScreen) {
+//                getScreen();
+//                hasCutScreen = false;
+//            }
+            if (!start.get()) {
+                handler.removeCallbacks(this);
+                mHandlerThread.quitSafely();
+                return;
             }
-            handler.postDelayed(this, video_interval);
         }
     };
 
