@@ -8,6 +8,9 @@ q_list *queue = NULL;
 int32_t cancel = 0;
 
 int init_queue() {
+    if (queue) {
+        return 0;
+    }
     queue = (q_list *) malloc(sizeof(q_list));
     cancel = 0;
     if (queue) {

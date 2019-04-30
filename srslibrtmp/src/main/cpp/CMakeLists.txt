@@ -11,7 +11,6 @@ set(push
         push/push_queue.c
         push/push_flvenc.c)
 
-
 add_library(srsPush STATIC ${push})
 target_include_directories(srsPush PRIVATE push srs/libs)
 target_link_libraries(srsPush srsrtmp)
@@ -24,13 +23,8 @@ set(media
         jni_bridge.cpp)
 
 add_library(ndkmedia SHARED ${media})
-#add_library(mp4v2
-#        SHARED
-#        IMPORTED)
-#set_target_properties(mp4v2
-#        PROPERTIES
-#        IMPORTED_LOCATION ${NATIVE_LIBS}/${ANDROID_ABI}/libmp4v2.so)
-target_link_libraries(ndkmedia oboe android mediandk atomic srsPush mp4v2 )
+
+target_link_libraries(ndkmedia oboe android mediandk atomic srsPush mp4v2)
 target_include_directories(ndkmedia PRIVATE oboe/include push mp4v2/include)
 target_compile_options(ndkmedia
         PRIVATE

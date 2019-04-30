@@ -8,7 +8,7 @@
 #include <sys/prctl.h>
 
 RTMP *m_pRtmp;
-media_config *media_config_p;
+media_config *media_config_p = NULL;
 
 int init_srs(const char *url) {
     media_config_p = (media_config *) malloc(sizeof(media_config));
@@ -40,7 +40,9 @@ int init_srs(const char *url) {
 }
 
 void rtmp_destroy() {
-    free(media_config_p);
+    if (media_config_p != NULL) {
+        free(media_config_p);
+    }
     cancel_queue();
 //    if (m_pRtmp) {
 //        //关闭rtmp

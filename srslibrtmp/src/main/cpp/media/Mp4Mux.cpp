@@ -18,9 +18,11 @@ static uint32_t last_time = 0;
 
 void find_prefix(uint8_t *, uint32_t);
 
-Mp4Mux::Mp4Mux() {
+Mp4Mux::Mp4Mux(const char *pFileName, uint32_t timeScal, uint32_t width, uint32_t height,
+               uint32_t framerate, uint32_t samplerate) {
     is_set_SPS = false;
     is_set_PPS = false;
+    mMP4FileHandle = initMp4File(pFileName, timeScal, width, height, framerate, samplerate);
 }
 
 Mp4Mux::~Mp4Mux() {
@@ -44,9 +46,9 @@ Mp4Mux::initMp4File(const char *pFileName, uint32_t timeScale, uint32_t width, u
     return nullptr;
 }
 
-bool Mp4Mux::writeH264data(MP4FileHandle mp4File, uint8_t *data, uint32_t len, uint32_t time) {
+bool Mp4Mux::writeH264data(uint8_t *data, uint32_t len, uint32_t time) {
 //    LOGI("nalu.type: %d", data[4] & 0x1f);
-    if (mp4File == MP4_INVALID_FILE_HANDLE) {
+    if (mMP4FileHandle == MP4_INVALID_FILE_HANDLE) {
         LOGI("mp4File==MP4_INVALID_FILE_HANDLE");
         return false;
     }
@@ -68,7 +70,7 @@ bool Mp4Mux::writeH264data(MP4FileHandle mp4File, uint8_t *data, uint32_t len, u
             data[3] = dsize & 0xff;
             uint32_t duration = time / 1000.0f * mTimeScale;
             LOGI("duration=: %d", duration);
-            if (!MP4WriteSample(mp4File, mVideoTrackId, data, len, duration, 0, type == 5)) {
+            if (!MP4WriteSample(mMP4FileHandle, mVideoTrackId, data, len, duration, 0, type == 5)) {
                 return false;
             }
             last_time = time;
@@ -77,13 +79,14 @@ bool Mp4Mux::writeH264data(MP4FileHandle mp4File, uint8_t *data, uint32_t len, u
         case TYPE_H264_PPS: {
             uint8_t *pps = data + prefix;
             if (mVideoTrackId == MP4_INVALID_TRACK_ID || !is_set_SPS) return false;
-            MP4AddH264PictureParameterSet(mp4File, mVideoTrackId, pps, len - prefix);
+            MP4AddH264PictureParameterSet(mMP4FileHandle, mVideoTrackId, pps, len - prefix);
             is_set_PPS = true;
             break;
         }
         case TYPE_H264_SPS: {
             uint8_t *sps = data + prefix;
-            mVideoTrackId = MP4AddH264VideoTrack(mp4File, mTimeScale, mTimeScale / mFramerate,
+            mVideoTrackId = MP4AddH264VideoTrack(mMP4FileHandle, mTimeScale,
+                                                 mTimeScale / mFramerate,
                                                  mWidth,
                                                  mHeight,
                                                  sps[1], // sps[1] AVCProfileIndication
@@ -91,8 +94,8 @@ bool Mp4Mux::writeH264data(MP4FileHandle mp4File, uint8_t *data, uint32_t len, u
                                                  sps[3], // sps[3] AVCLevelIndication
                                                  3);
             if (mVideoTrackId == MP4_INVALID_TRACK_ID) return false;
-            MP4SetVideoProfileLevel(mp4File, 0x03);
-            MP4AddH264SequenceParameterSet(mp4File, mVideoTrackId, sps, len - prefix);
+            MP4SetVideoProfileLevel(mMP4FileHandle, 0x03);
+            MP4AddH264SequenceParameterSet(mMP4FileHandle, mVideoTrackId, sps, len - prefix);
             is_set_SPS = true;
             break;
         }
@@ -120,46 +123,47 @@ void find_prefix(uint8_t *data, uint32_t size) {
     }
 }
 
-bool Mp4Mux::cole(MP4FileHandle mp4File) {
-    MP4Close(mp4File);
+bool Mp4Mux::cole() {
+    MP4Close(mMP4FileHandle);
     return false;
 }
 
-void Mp4Mux::addSPSPPS(MP4FileHandle hMp4File, uint8_t *sps, uint32_t sps_len, uint8_t *pps,
+void Mp4Mux::addSPSPPS(uint8_t *sps, uint32_t sps_len, uint8_t *pps,
                        uint32_t pps_len) {
-    if (hMp4File == MP4_INVALID_FILE_HANDLE) {
+    if (mMP4FileHandle == MP4_INVALID_FILE_HANDLE) {
         return;
     }
-    mVideoTrackId = MP4AddH264VideoTrack(hMp4File, mTimeScale, mTimeScale / mFramerate,
+    mVideoTrackId = MP4AddH264VideoTrack(mMP4FileHandle, mTimeScale, mTimeScale / mFramerate,
                                          mWidth,
                                          mHeight,
                                          sps[1], // sps[1] AVCProfileIndication
                                          sps[2], // sps[2] profile_compat
                                          sps[3], // sps[3] AVCLevelIndication
                                          3);
-    MP4SetVideoProfileLevel(hMp4File, 0x08); //  Simple Profile @ Level 3    1
-    MP4AddH264SequenceParameterSet(hMp4File, mVideoTrackId, sps, sps_len);
-    MP4AddH264PictureParameterSet(hMp4File, mVideoTrackId, pps, pps_len);
+    MP4SetVideoProfileLevel(mMP4FileHandle, 0x08); //  Simple Profile @ Level 3    1
+    MP4AddH264SequenceParameterSet(mMP4FileHandle, mVideoTrackId, sps, sps_len);
+    MP4AddH264PictureParameterSet(mMP4FileHandle, mVideoTrackId, pps, pps_len);
 }
 
-bool Mp4Mux::addTrackESConfiguration(MP4FileHandle hMp4File, uint8_t *config, uint32_t conf_len) {
-    mAudioTrackId = MP4AddAudioTrack(hMp4File, mSimpleRate, 1024, MP4_MPEG4_AUDIO_TYPE);
+bool Mp4Mux::addTrackESConfiguration(uint8_t *config, uint32_t conf_len) {
+    mAudioTrackId = MP4AddAudioTrack(mMP4FileHandle, mSimpleRate, mSimpleRate,
+                                     MP4_MPEG4_AUDIO_TYPE);
     if (mAudioTrackId == MP4_INVALID_TRACK_ID)
         return false;
-    MP4SetTrackESConfiguration(hMp4File, mAudioTrackId, config, conf_len);
-    MP4SetAudioProfileLevel(hMp4File, 0x02);
+    MP4SetTrackESConfiguration(mMP4FileHandle, mAudioTrackId, config, conf_len);
+    MP4SetAudioProfileLevel(mMP4FileHandle, 0x02);
     return true;
 }
 
-bool Mp4Mux::writeAACdata(MP4FileHandle mp4File, uint8_t *data, uint32_t len) {
-    if (!MP4WriteSample(mp4File, mAudioTrackId, data, len, MP4_INVALID_DURATION, 0,
+bool Mp4Mux::writeAACdata(uint8_t *data, uint32_t len) {
+    if (!MP4WriteSample(mMP4FileHandle, mAudioTrackId, data, len, MP4_INVALID_DURATION, 0,
                         true)) {
         return false;
     }
     return true;
 }
 
-bool Mp4Mux::writeData(MP4FileHandle mp4File, uint8_t *data, uint32_t size) {
+bool Mp4Mux::writeData(uint8_t *data, uint32_t size) {
     return false;
 }
 

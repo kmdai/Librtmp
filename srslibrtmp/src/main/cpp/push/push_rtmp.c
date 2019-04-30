@@ -11,9 +11,11 @@ srs_rtmp_t srs_rtmp;
 
 int init_srs(const char *url) {
     srs_rtmp = srs_rtmp_create(url);
-    media_config_p = (media_config *) malloc(sizeof(media_config));
-    media_config_p->sps = NULL;
-    media_config_p->pps = NULL;
+    if (!media_config_p) {
+        media_config_p = (media_config *) malloc(sizeof(media_config));
+        media_config_p->sps = NULL;
+        media_config_p->pps = NULL;
+    }
     init_queue();
     int ret;
     if ((ret = srs_rtmp_handshake(srs_rtmp)) != 0) {

@@ -27,7 +27,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * Created by zx315476228 on 17-3-3.
  */
 
-public class EGLRender implements SurfaceTexture.OnFrameAvailableListener {
+public class EGLRender implements SurfaceTexture.OnFrameAvailableListener, Handler.Callback {
     private final int HANDLER_PHOTO_CALLBACK = 0;
     private static final String TAG = "EncodeDecodeSurface";
     private static final boolean VERBOSE = false;           // lots of logging
@@ -71,6 +71,7 @@ public class EGLRender implements SurfaceTexture.OnFrameAvailableListener {
     private Handler handler;
     private HandlerThread mHandlerThread;
     private ExecutorService singleThreadExecutor = Executors.newSingleThreadExecutor();
+
 
     private class CutScreeenThread implements Runnable {
         private int[] modelData;
@@ -187,8 +188,8 @@ public class EGLRender implements SurfaceTexture.OnFrameAvailableListener {
                 EGL14.EGL_HEIGHT, mHeight,
                 EGL14.EGL_NONE
         };
-        mEGLSurface = EGL14.eglCreatePbufferSurface(mEGLDisplay, configs[0], surfaceAttribs, 0);
 
+        mEGLSurface = EGL14.eglCreatePbufferSurface(mEGLDisplay, configs[0], surfaceAttribs, 0);
 
         checkEglError("eglCreatePbufferSurface");
         if (mEGLSurface == null) {
@@ -323,15 +324,23 @@ public class EGLRender implements SurfaceTexture.OnFrameAvailableListener {
     public void start() {
         mHandlerThread = new HandlerThread("egl_render");
         mHandlerThread.start();
-        handler = new Handler(mHandlerThread.getLooper());
-        start.set(true);
+        handler = new Handler(mHandlerThread.getLooper(), new Handler.Callback() {
+            @Override
+            public boolean handleMessage(Message msg) {
+                handler.post(startRun);
+                return false;
+            }
+        });
         handler.post(startRun);
+        start.set(true);
     }
 
     Runnable startRun = new Runnable() {
         @Override
         public void run() {
-            handler.postAtTime(this, SystemClock.uptimeMillis() + mPerFrameTime);
+            if(start.get()){
+                handler.sendEmptyMessageAtTime(0x01, SystemClock.uptimeMillis() + mPerFrameTime);
+            }
 
             makeCurrent(1);
             awaitNewImage();
@@ -352,6 +361,11 @@ public class EGLRender implements SurfaceTexture.OnFrameAvailableListener {
             }
         }
     };
+
+    @Override
+    public boolean handleMessage(Message msg) {
+        return false;
+    }
 
     /**
      * 获取当前屏幕信息

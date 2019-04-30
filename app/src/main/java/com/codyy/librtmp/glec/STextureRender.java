@@ -9,23 +9,23 @@ import java.nio.FloatBuffer;
 /**
  * Created by guoheng on 2016/8/31.
  */
-public  class STextureRender {
+public class STextureRender {
     private static final int FLOAT_SIZE_BYTES = 4;
     private static final String TAG = "STextureRendering";
 
 
     private static final float FULL_RECTANGLE_COORDS[] = {
-            -1.0f, -1.0f,1.0f,   // 0 bottom left
-            1.0f, -1.0f,1.0f,   // 1 bottom right
-            -1.0f,  1.0f,1.0f,   // 2 top left
-            1.0f,  1.0f,1.0f   // 3 top right
+            -1.0f, -1.0f, 1.0f,   // 0 bottom left
+            1.0f, -1.0f, 1.0f,   // 1 bottom right
+            -1.0f, 1.0f, 1.0f,   // 2 top left
+            1.0f, 1.0f, 1.0f   // 3 top right
     };
 
     private static final float FULL_RECTANGLE_TEX_COORDS[] = {
-            0.0f, 1.0f, 1f,1.0f,    // 0 bottom left
-            1.0f, 1.0f,1f,1.0f,     // 1 bottom right
-            0.0f, 0.0f, 1f,1.0f,    // 2 top left
-            1.0f, 0.0f ,1f,1.0f     // 3 top right
+            0.0f, 1.0f, 1f, 1.0f,    // 0 bottom left
+            1.0f, 1.0f, 1f, 1.0f,     // 1 bottom right
+            0.0f, 0.0f, 1f, 1.0f,    // 2 top left
+            1.0f, 0.0f, 1f, 1.0f     // 3 top right
     };
 
     private static final FloatBuffer FULL_RECTANGLE_BUF =
@@ -36,25 +36,23 @@ public  class STextureRender {
 
     private static final String VERTEX_SHADER =
             "uniform mat4 uMVPMatrix;\n" +
-                    "uniform mat4 uSTMatrix;\n" +
-                    "attribute vec4 aPosition;\n" +
-                    "attribute vec4 aTextureCoord;\n" +
-                    "varying vec4 vTextureCoord;\n" +
-                    "void main() {\n" +
-                    "    gl_Position = uMVPMatrix * aPosition;\n" +
-                    "    vTextureCoord = uSTMatrix * aTextureCoord;\n" +
-                    "}\n";
+            "uniform mat4 uSTMatrix;\n" +
+            "attribute vec4 aPosition;\n" +
+            "attribute vec4 aTextureCoord;\n" +
+            "varying vec4 vTextureCoord;\n" +
+            "void main() {\n" +
+            "    gl_Position = uMVPMatrix * aPosition;\n" +
+            "    vTextureCoord = uSTMatrix * aTextureCoord;\n" +
+            "}\n";
 
     private static final String FRAGMENT_SHADER =
             "#extension GL_OES_EGL_image_external : require\n" +
-                    "precision mediump float;\n" +      // highp here doesn't seem to matter
-                    "varying vec4 vTextureCoord;\n" +
-                    "uniform samplerExternalOES sTexture;\n" +
-                    "void main() {\n" +
-                    "    gl_FragColor = texture2D(sTexture, vTextureCoord.xy/vTextureCoord.z);" +
-                    "}\n";
-
-
+             "precision mediump float;\n" +      // highp here doesn't seem to matter
+             "varying vec4 vTextureCoord;\n" +
+             "uniform samplerExternalOES sTexture;\n" +
+             "void main() {\n" +
+             "    gl_FragColor = texture2D(sTexture, vTextureCoord.xy/vTextureCoord.z);" +
+             "}\n";
 
 
     private float[] mMVPMatrix = new float[16];
@@ -84,7 +82,6 @@ public  class STextureRender {
     }
 
 
-
     /**
      * Initializes GL state.  Call this after the EGL surface has been created and made current.
      */
@@ -112,6 +109,7 @@ public  class STextureRender {
 //        GLES20.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES20.GL_TEXTURE_WRAP_T,
 //                GLES20.GL_CLAMP_TO_EDGE);
     }
+
     /**
      * create external texture
      *
@@ -121,7 +119,7 @@ public  class STextureRender {
         int[] tex = new int[1];
         GLES20.glGenTextures(1, tex, 0);
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
-        GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES,tex[0]);
+        GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, tex[0]);
         GLES20.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES,
                 GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE);
         GLES20.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES,
@@ -145,14 +143,14 @@ public  class STextureRender {
 
         // Connect vertexBuffer to "aPosition".
         GLES20.glVertexAttribPointer(maPositionHandle, 3,
-                GLES20.GL_FLOAT, false, 3*FLOAT_SIZE_BYTES, FULL_RECTANGLE_BUF);
+                GLES20.GL_FLOAT, false, 3 * FLOAT_SIZE_BYTES, FULL_RECTANGLE_BUF);
 
         // Enable the "aTextureCoord" vertex attribute.
         GLES20.glEnableVertexAttribArray(maTextureHandle);
 
         // Connect texBuffer to "aTextureCoord".
         GLES20.glVertexAttribPointer(maTextureHandle, 4,
-                GLES20.GL_FLOAT, false, 4*FLOAT_SIZE_BYTES, FULL_RECTANGLE_TEX_BUF);
+                GLES20.GL_FLOAT, false, 4 * FLOAT_SIZE_BYTES, FULL_RECTANGLE_TEX_BUF);
 
         Matrix.setIdentityM(mMVPMatrix, 0);
         GLES20.glUniformMatrix4fv(muMVPMatrixHandle, 1, false, mMVPMatrix, 0);

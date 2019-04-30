@@ -7,6 +7,7 @@
 
 #include "mp4v2/mp4v2.h"
 #include "string"
+#include <memory>
 //#include "push_utils.h"
 
 
@@ -28,7 +29,8 @@ using Mp4Context=struct _mp4_context;
 
 class Mp4Mux {
 public:
-    Mp4Mux();
+    Mp4Mux(const char *pFileName, uint32_t timeScal, uint32_t width, uint32_t height,
+           uint32_t framerate, uint32_t samplerate);
 
     ~Mp4Mux();
 
@@ -37,26 +39,36 @@ public:
     initMp4File(const char *pFileName, uint32_t timeScal, uint32_t width, uint32_t height,
                 uint32_t framerate, uint32_t samplerate);
 
-    bool writeH264data(MP4FileHandle mp4File, uint8_t *data, uint32_t len,uint32_t time);
+    bool writeH264data(uint8_t *data, uint32_t len, uint32_t time);
 
-    bool writeAACdata(MP4FileHandle mp4File, uint8_t *data, uint32_t len);
+    bool writeAACdata(uint8_t *data, uint32_t len);
 
-    void addSPSPPS(MP4FileHandle hMp4File, uint8_t *sps, uint32_t sps_len, uint8_t *pps,
+    void addSPSPPS(uint8_t *sps, uint32_t sps_len, uint8_t *pps,
                    uint32_t pps_len);
 
-    bool addTrackESConfiguration(MP4FileHandle hMp4File, uint8_t *config, uint32_t conf_len);
+    bool addTrackESConfiguration(uint8_t *config, uint32_t conf_len);
 
-    bool cole(MP4FileHandle mp4File);
-bool writeData(MP4FileHandle mp4File,uint8_t* data,uint32_t size);
+    bool cole();
+
+    bool writeData(uint8_t *data, uint32_t size);
+
 private:
     uint32_t mTimeScale = 90000;
     MP4TrackId mVideoTrackId;
     MP4TrackId mAudioTrackId;
+    MP4FileHandle mMP4FileHandle;
     uint32_t mWidth;
     uint32_t mHeight;
     uint32_t mFramerate;
     uint32_t mSimpleRate;
 };
 
+using Mp4MuxPtr= std::shared_ptr<Mp4Mux>;
+
+static Mp4MuxPtr
+createMp4MuxPtr(const char *pFileName, uint32_t timeScal, uint32_t width, uint32_t height,
+                uint32_t framerate, uint32_t samplerate) {
+    return std::make_shared<Mp4Mux>(pFileName, timeScal, width, height, framerate, samplerate);
+}
 
 #endif //LIBRTMP_MP4MUX_H
