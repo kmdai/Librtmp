@@ -26,6 +26,8 @@ public:
 
     void openRecordingStream();
 
+    void closeRecording();
+
     void startStream(oboe::AudioStream *stream);
 
     void stopStream(oboe::AudioStream *stream);
@@ -47,16 +49,9 @@ private:
             oboe::AudioStreamBuilder *builder);
 };
 
-//extern "C" {
-//long startAudioRecord() {
-//    auto audioRecordEngine = new AudioRecordEngine();
-//    audioRecordEngine->openRecordingStream();
-//    return (long) (audioRecordEngine);
-//}
-//int cancelAudioRecord(long ptr) {
-//    auto audioRecordEngine = (AudioRecordEngine *) (ptr);
-//    delete audioRecordEngine;
-//    return 0;
-//}
-//};
+using AudioRecordEnginePtr =std::shared_ptr<AudioRecordEngine>;
+
+
+AudioRecordEnginePtr createAudioRecordEnginePtr();
+
 #endif //LIBRTMP_AUDIORECORDENGINE_H

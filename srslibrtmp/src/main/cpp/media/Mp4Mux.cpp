@@ -47,7 +47,7 @@ Mp4Mux::initMp4File(const char *pFileName, uint32_t timeScale, uint32_t width, u
 }
 
 bool Mp4Mux::writeH264data(uint8_t *data, uint32_t len, uint32_t time) {
-//    LOGI("nalu.type: %d", data[4] & 0x1f);
+    LOGI("nalu.type: %d", data[4] & 0x1f);
     if (mMP4FileHandle == MP4_INVALID_FILE_HANDLE) {
         LOGI("mp4File==MP4_INVALID_FILE_HANDLE");
         return false;
@@ -59,7 +59,7 @@ bool Mp4Mux::writeH264data(uint8_t *data, uint32_t len, uint32_t time) {
     switch (type) {
         case TYPE_H264_I_FRAME:
         case TYPE_H264_P_FRAME: {
-            if (mAudioTrackId == MP4_INVALID_TRACK_ID) {
+            if (mVideoTrackId == MP4_INVALID_TRACK_ID) {
                 return false;
             }
 
@@ -78,7 +78,10 @@ bool Mp4Mux::writeH264data(uint8_t *data, uint32_t len, uint32_t time) {
         }
         case TYPE_H264_PPS: {
             uint8_t *pps = data + prefix;
-            if (mVideoTrackId == MP4_INVALID_TRACK_ID || !is_set_SPS) return false;
+            if (mVideoTrackId == MP4_INVALID_TRACK_ID || !is_set_SPS) {
+                LOGI("TYPE_H264_PPS:mVideoTrackId==MP4_INVALID_TRACK_ID");
+                return false;
+            }
             MP4AddH264PictureParameterSet(mMP4FileHandle, mVideoTrackId, pps, len - prefix);
             is_set_PPS = true;
             break;
@@ -93,7 +96,10 @@ bool Mp4Mux::writeH264data(uint8_t *data, uint32_t len, uint32_t time) {
                                                  sps[2], // sps[2] profile_compat
                                                  sps[3], // sps[3] AVCLevelIndication
                                                  3);
-            if (mVideoTrackId == MP4_INVALID_TRACK_ID) return false;
+            if (mVideoTrackId == MP4_INVALID_TRACK_ID) {
+                LOGI("TYPE_H264_SPS:mVideoTrackId==MP4_INVALID_TRACK_ID");
+                return false;
+            }
             MP4SetVideoProfileLevel(mMP4FileHandle, 0x03);
             MP4AddH264SequenceParameterSet(mMP4FileHandle, mVideoTrackId, sps, len - prefix);
             is_set_SPS = true;
@@ -167,3 +173,7 @@ bool Mp4Mux::writeData(uint8_t *data, uint32_t size) {
     return false;
 }
 
+Mp4MuxPtr createMp4MuxPtr(const char *pFileName, uint32_t timeScal, uint32_t width, uint32_t height,
+                          uint32_t framerate, uint32_t samplerate) {
+    return std::make_shared<Mp4Mux>(pFileName, timeScal, width, height, framerate, samplerate);
+}

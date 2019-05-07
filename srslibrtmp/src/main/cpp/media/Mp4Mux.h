@@ -12,7 +12,7 @@
 
 
 
-struct _mp4_context {
+struct Mp4Context {
     uint32_t width;
     uint32_t height;
     uint32_t frame_rate;
@@ -25,7 +25,6 @@ struct _mp4_context {
     uint32_t sampleLenFieldSizeMinusOne;
 };
 
-using Mp4Context=struct _mp4_context;
 
 class Mp4Mux {
 public:
@@ -65,10 +64,7 @@ private:
 
 using Mp4MuxPtr= std::shared_ptr<Mp4Mux>;
 
-static Mp4MuxPtr
-createMp4MuxPtr(const char *pFileName, uint32_t timeScal, uint32_t width, uint32_t height,
-                uint32_t framerate, uint32_t samplerate) {
-    return std::make_shared<Mp4Mux>(pFileName, timeScal, width, height, framerate, samplerate);
-}
+Mp4MuxPtr createMp4MuxPtr(const char *pFileName, uint32_t timeScal, uint32_t width, uint32_t height,
+                          uint32_t framerate, uint32_t samplerate) ;
 
 #endif //LIBRTMP_MP4MUX_H

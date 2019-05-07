@@ -38,8 +38,4 @@ private:
 
 };
 
-extern "C" {
-MediaConfig *MediaConfig_new(int width, int height, int framerate, int bitrate, char *name);
-
-};
 #endif //LIBRTMP_MEDIAENCODER_H

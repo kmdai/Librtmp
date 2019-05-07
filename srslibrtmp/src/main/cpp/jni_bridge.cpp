@@ -15,15 +15,19 @@ extern "C"
 #define JNI_CLS_MANAGER "com/kmdai/srslibrtmp/SRSLibrtmpManager"
 static JavaVM *javaVM;
 //static long audio_record;
-//AudioRecordEngine* audioRecordEngine;
+AudioRecordEnginePtr audioRecordEnginePtr;
 Mp4MuxPtr mp4Mux;
-void *mux(void *p);
+void *mux_mp4(void *p);
 jboolean setUrl(JNIEnv *env, jobject instance, jstring url) {
     const char *rtmp_url = env->GetStringUTFChars(url, 0);
     int result = init_srs(rtmp_url);
     if (result != 0) {
         rtmp_start(javaVM);
     }
+    if (!audioRecordEnginePtr) {
+        audioRecordEnginePtr = createAudioRecordEnginePtr();
+    }
+    audioRecordEnginePtr->openRecordingStream();
     env->ReleaseStringUTFChars(url, rtmp_url);
     return result != 0 ? JNI_TRUE : JNI_FALSE;
 }
@@ -37,7 +41,7 @@ void addFrame(JNIEnv *env, jobject instance, jbyteArray data, jint size, jint ty
     env->ReleaseByteArrayElements(data, chunk, 0);
 }
 
-void *mux(void *gVm) {
+void *mux_mp4(void *gVm) {
     JavaVM *gvm = (JavaVM *) gVm;
     JNIEnv *env = NULL;
     if (0 != gvm->AttachCurrentThread(&env, NULL)) {
@@ -85,12 +89,15 @@ void *mux(void *gVm) {
         free(node_first);
     }
     mp4Mux->cole();
+    SRS_LOGE("delete mp4Mux---");
     gvm->DetachCurrentThread();
     return NULL;
 }
 void release(JNIEnv *env, jobject instance) {
     rtmp_destroy();
-    SRS_LOGE("delete mp4Mux---");
+    if (audioRecordEnginePtr) {
+        audioRecordEnginePtr->closeRecording();
+    }
 }
 
 void setFrameRate(JNIEnv *env, jobject instance, jint framerate) {
@@ -117,12 +124,9 @@ void setChannelCount(JNIEnv *env, jobject instance, jint channel) {
     set_audiochannel(channel);
 }
 
-void setAudiosamplerate(JNIEnv *env, jobject instance, jint audiosamplerate) {
-    set_audiosamplerate(audiosamplerate);
-}
 
 void setAudioSampleRate(JNIEnv *env, jobject instance, jint audiosamplesize) {
-    set_audiosamplesize(audiosamplesize);
+    set_audiosamplerate(audiosamplesize);
 }
 
 void openAudioRecord(JNIEnv *env, jobject instance) {
@@ -131,14 +135,14 @@ void openAudioRecord(JNIEnv *env, jobject instance) {
 //    audioRecordEngine->openRecordingStream();
 }
 void startScreenRecord(JNIEnv *env, jobject instance) {
-    mp4Mux = createMp4MuxPtr("/sdcard/DCIM/100ANDRO/test_5.mp4", 90000,
+    mp4Mux = createMp4MuxPtr("/sdcard/DCIM/100ANDRO/test_11.mp4", 90000,
                              media_config_p->width, media_config_p->height,
                              media_config_p->framerate,
                              media_config_p->audiosamplerate);
     pthread_t pthread;
     pthread_attr_t attr;
     pthread_attr_init(&attr);
-    pthread_create(&pthread, &attr, mux, javaVM);
+    pthread_create(&pthread, &attr, mux_mp4, javaVM);
 }
 void init(JNIEnv *env, jobject instance) {
     media_config_p = (media_config *) malloc(sizeof(media_config));

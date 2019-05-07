@@ -5,8 +5,7 @@
 #include "AudioRecordEngine.h"
 
 AudioRecordEngine::~AudioRecordEngine() {
-    stopStream(mRecordStream);
-    closeStream(mRecordStream);
+
 }
 
 /**
@@ -19,7 +18,7 @@ AudioRecordEngine::~AudioRecordEngine() {
 oboe::DataCallbackResult AudioRecordEngine::onAudioReady(oboe::AudioStream *oboeStream,
                                                          void *audioData, int32_t numFrames) {
 
-    auto *data = static_cast<uint8_t *>(audioData);
+    auto *data = static_cast<short *>(audioData);
     SRS_LOGE("---%04x---%04x%04x%04x---numFrames:%d", data[0], data[1],
              data[2], data[3], numFrames);
     return oboe::DataCallbackResult::Continue;
@@ -94,11 +93,21 @@ AudioRecordEngine::setupCommonStreamParameters(oboe::AudioStreamBuilder *builder
     // mode.
     builder->setAudioApi(mAudioApi)
             ->setFormat(mFormat)
-            ->setSharingMode(oboe::SharingMode::Exclusive)
+            ->setBufferCapacityInFrames(1024)
+            ->setSharingMode(oboe::SharingMode::Shared)
             ->setPerformanceMode(oboe::PerformanceMode::LowLatency);
     return builder;
 }
 
 AudioRecordEngine::AudioRecordEngine() {
 
+}
+
+void AudioRecordEngine::closeRecording() {
+    stopStream(mRecordStream);
+    closeStream(mRecordStream);
+}
+
+AudioRecordEnginePtr createAudioRecordEnginePtr() {
+    return std::make_shared<AudioRecordEngine>();
 }

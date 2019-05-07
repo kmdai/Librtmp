@@ -64,6 +64,7 @@ public class SRSLibrtmpManager {
 
         public SRSLibrtmpManager build() {
             SRSLibrtmpManager srsLibrtmpManager = new SRSLibrtmpManager();
+            srsLibrtmpManager.init();
             srsLibrtmpManager.setAudioBitrate(aBitrate);
             srsLibrtmpManager.setAudioSampleRate(audioRate);
             srsLibrtmpManager.setFrameRate(frameRate);

@@ -83,7 +83,6 @@ public class MediaEncoder implements android.os.Handler.Callback, EGLRender.onFr
                 .setWidth(width)
                 .setHeight(height)
                 .build();
-//        mSRSLibrtmpManager = new LibrtmpManager();
         reset();
         MediaFormat mediaFormat = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, width, height);
         MediaCodecList mediaCodecList = new MediaCodecList(MediaCodecList.REGULAR_CODECS);
@@ -127,11 +126,11 @@ public class MediaEncoder implements android.os.Handler.Callback, EGLRender.onFr
         mSurface = mVideoMediaCodec.createInputSurface();
         mEGLRender = new EGLRender(mSurface, m_width, m_height, (int) mFrameRate);
         mEGLRender.setCallBack(this);
-        audioInit();
+//        audioInit();
         mVideoMediaCodec.start();
 //        mSRSLibrtmpManager.openAudioRecord();
-        mAudioRecord.startRecording();
-        mAudioCodec.start();
+//        mAudioRecord.startRecording();
+//        mAudioCodec.start();
     }
 
     /**
@@ -184,8 +183,8 @@ public class MediaEncoder implements android.os.Handler.Callback, EGLRender.onFr
     public boolean handleMessage(Message msg) {
         if (msg.what == START_PUSH) {
             isStart = true;
-            new Thread(new RecordRunnable()).start();
-            new Thread(new RecordEncodec()).start();
+//            new Thread(new RecordRunnable()).start();
+//            new Thread(new RecordEncodec()).start();
 //            new Thread(new RecordDecodec()).start();
             return true;
         }
@@ -378,7 +377,6 @@ public class MediaEncoder implements android.os.Handler.Callback, EGLRender.onFr
         mLock.lock();
         mCondition.signal();
         mLock.unlock();
-        mEGLRender.stop();
     }
 
     public void start(String url) {
@@ -397,11 +395,11 @@ public class MediaEncoder implements android.os.Handler.Callback, EGLRender.onFr
 //                Log.d("---", "connect false");
 //                return;
 //            }
-//            mSRSLibrtmpManager.startScreenRecord();
+            mSRSLibrtmpManager.startScreenRecord();
             mHandler.sendEmptyMessage(START_PUSH);
-            if (!mSRSLibrtmpManager.setUrl(mRtmpUrl)) {
-                return;
-            }
+//            if (!mSRSLibrtmpManager.setUrl(mRtmpUrl)) {
+//                return;
+//            }
             mEGLRender.start();
             MediaCodec.BufferInfo bufferInfo = new MediaCodec.BufferInfo();
             for (; ; ) {
@@ -423,7 +421,7 @@ public class MediaEncoder implements android.os.Handler.Callback, EGLRender.onFr
 //                        mLibrtmpManager.setSpsPps(outData, outData.length);
                         } else {
                             calcTotalTime(bufferInfo.presentationTimeUs / 1000);
-                            Log.d("Frame----", "getTimeIndex()--" + (outData[4] & 0x1f));
+//                            Log.d("Frame----", "getTimeIndex()--" + (outData[4] & 0x1f));
 //                        time+=30;
                             mSRSLibrtmpManager.addFrame(outData, outData.length, SRSLibrtmpManager.NODE_TYPE_VIDEO, bufferInfo.flags, getTimeIndex());
                         }
@@ -440,6 +438,7 @@ public class MediaEncoder implements android.os.Handler.Callback, EGLRender.onFr
                 }
             }
             try {
+                mEGLRender.stop();
                 mVideoMediaCodec.stop();
                 mVideoMediaCodec.release();
                 Log.d("---", "mVideoMediaCodec:release");

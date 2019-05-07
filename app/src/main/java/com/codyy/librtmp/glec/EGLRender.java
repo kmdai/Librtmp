@@ -266,7 +266,8 @@ public class EGLRender implements SurfaceTexture.OnFrameAvailableListener, Handl
     private void checkEglError(String msg) {
         int error;
         if ((error = EGL14.eglGetError()) != EGL14.EGL_SUCCESS) {
-            throw new RuntimeException(msg + ": EGL error: 0x" + Integer.toHexString(error));
+//            throw new RuntimeException(msg + ": EGL error: 0x" + Integer.toHexString(error));
+            Log.e(TAG, msg + ": EGL error: 0x" + Integer.toHexString(error));
         }
     }
 
@@ -338,27 +339,17 @@ public class EGLRender implements SurfaceTexture.OnFrameAvailableListener, Handl
     Runnable startRun = new Runnable() {
         @Override
         public void run() {
-            if(start.get()){
+            if (start.get()) {
                 handler.sendEmptyMessageAtTime(0x01, SystemClock.uptimeMillis() + mPerFrameTime);
             }
-
             makeCurrent(1);
             awaitNewImage();
             //todo 帧率控制
             drawImage();
             callBack.onUpdate();
-            Log.d(TAG, "-----count:" + count + "time:" + mPerFrameTime * count++);
+//            Log.d(TAG, "-----count:" + count + "time:" + mPerFrameTime * count++);
 //            setPresentationTime(computePresentationTimeNsec(count++));
             swapBuffers();
-//            if (hasCutScreen) {
-//                getScreen();
-//                hasCutScreen = false;
-//            }
-            if (!start.get()) {
-                handler.removeCallbacks(this);
-                mHandlerThread.quitSafely();
-                return;
-            }
         }
     };
 
@@ -385,5 +376,7 @@ public class EGLRender implements SurfaceTexture.OnFrameAvailableListener, Handl
 
     public void stop() {
         start.set(false);
+        mHandlerThread.quitSafely();
+
     }
 }
