@@ -2,30 +2,24 @@ cmake_minimum_required(VERSION 3.4.1)
 
 #project(srs_Librtmp LANGUAGES C CXX)
 #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
-add_subdirectory(srs)
-add_subdirectory(oboe ./oboe-bin)
-add_subdirectory(mp4v2)
-set(NATIVE_LIBS ${CMAKE_SOURCE_DIR}/../../../libs)
-set(push
+set(fdk_path ${CMAKE_SOURCE_DIR}/../../../../fdkaac)
+set(media_k_path ../../../../media)
+set(push_path ../../../../push)
+
+add_subdirectory(srs ./srs-bin)
+add_subdirectory(${media_k_path} ./media_k)
+
+add_subdirectory(${push_path} ./push)
+
+include_directories(${push_path})
+set(push_s
         push/push_rtmp.c
-        push/push_queue.c
-        push/push_flvenc.c)
-
-add_library(srsPush STATIC ${push})
-target_include_directories(srsPush PRIVATE push srs/libs)
-target_link_libraries(srsPush srsrtmp)
-
-
-set(media
-        media/MediaEncoder.cpp
-        media/AudioRecordEngine.cpp
-        media/Mp4Mux.cpp
         jni_bridge.cpp)
 
-add_library(ndkmedia SHARED ${media})
-
-target_link_libraries(ndkmedia oboe android mediandk atomic srsPush mp4v2)
-target_include_directories(ndkmedia PRIVATE oboe/include push mp4v2/include)
-target_compile_options(ndkmedia
+add_library(srsPush STATIC ${push_s})
+target_include_directories(srsPush PRIVATE push srs/libs push ${media_k_path}/src)
+target_link_libraries(srsPush push srsrtmp android atomic media_k)
+target_compile_options(srsPush
         PRIVATE
         -std=c++11)
+

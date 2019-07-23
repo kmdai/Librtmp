@@ -57,8 +57,8 @@ public class MediaEncoder implements android.os.Handler.Callback, EGLRender.onFr
     private String mRtmpUrl = "rtmp://10.23.164.30:1935/srs/kmdai";
     //                RTMPMuxer mRTMPMuxer;
     long indexTime = 0;
-    private SRSLibrtmpManager mSRSLibrtmpManager;
-    //            private LibrtmpManager mSRSLibrtmpManager;
+//    private SRSLibrtmpManager mSRSLibrtmpManager;
+                private LibrtmpManager mSRSLibrtmpManager;
     private int mMiniAudioBufferSize;
     EGLRender mEGLRender;
 
@@ -74,15 +74,16 @@ public class MediaEncoder implements android.os.Handler.Callback, EGLRender.onFr
         mCondition = mLock.newCondition();
         mHandler = new Handler(this);
         mPCMS = new LinkedList<>();
-        mSRSLibrtmpManager = new SRSLibrtmpManager.Builder()
-                .setaBitrate(AUDIO_BIT_RATE)
-                .setAudioRate(AUDIO_SAMPLE_RATE)
-                .setChannel(AUDIO_CHANNEL_COUNT)
-                .setFrameRate(framerate)
-                .setvBitrate(bitrate)
-                .setWidth(width)
-                .setHeight(height)
-                .build();
+//        mSRSLibrtmpManager = new SRSLibrtmpManager.Builder()
+//                .setaBitrate(AUDIO_BIT_RATE)
+//                .setAudioRate(AUDIO_SAMPLE_RATE)
+//                .setChannel(AUDIO_CHANNEL_COUNT)
+//                .setFrameRate(framerate)
+//                .setvBitrate(bitrate)
+//                .setWidth(width)
+//                .setHeight(height)
+//                .build();
+        mSRSLibrtmpManager=new LibrtmpManager();
         reset();
         MediaFormat mediaFormat = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, width, height);
         MediaCodecList mediaCodecList = new MediaCodecList(MediaCodecList.REGULAR_CODECS);
@@ -391,11 +392,11 @@ public class MediaEncoder implements android.os.Handler.Callback, EGLRender.onFr
 
         @Override
         public void run() {
-//            if (!mSRSLibrtmpManager.setUrl(mRtmpUrl)) {
-//                Log.d("---", "connect false");
-//                return;
-//            }
-            mSRSLibrtmpManager.startScreenRecord();
+            if (!mSRSLibrtmpManager.setUrl(mRtmpUrl)) {
+                Log.d("---", "connect false");
+                return;
+            }
+//            mSRSLibrtmpManager.startScreenRecord();
             mHandler.sendEmptyMessage(START_PUSH);
 //            if (!mSRSLibrtmpManager.setUrl(mRtmpUrl)) {
 //                return;
@@ -418,11 +419,8 @@ public class MediaEncoder implements android.os.Handler.Callback, EGLRender.onFr
 
                         if (bufferInfo.flags == BUFFER_FLAG_CODEC_CONFIG) {
                             mSRSLibrtmpManager.addFrame(outData, outData.length, SRSLibrtmpManager.NODE_TYPE_VIDEO, bufferInfo.flags, 0);
-//                        mLibrtmpManager.setSpsPps(outData, outData.length);
                         } else {
                             calcTotalTime(bufferInfo.presentationTimeUs / 1000);
-//                            Log.d("Frame----", "getTimeIndex()--" + (outData[4] & 0x1f));
-//                        time+=30;
                             mSRSLibrtmpManager.addFrame(outData, outData.length, SRSLibrtmpManager.NODE_TYPE_VIDEO, bufferInfo.flags, getTimeIndex());
                         }
                         outputBuffer.clear();

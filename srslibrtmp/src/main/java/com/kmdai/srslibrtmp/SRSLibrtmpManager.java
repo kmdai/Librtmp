@@ -5,7 +5,7 @@ public class SRSLibrtmpManager {
     public final static int NODE_TYPE_VIDEO = 2;
 
     static {
-        System.loadLibrary("ndkmedia");
+        System.loadLibrary("srsPush");
     }
 
     private SRSLibrtmpManager() {
@@ -77,7 +77,7 @@ public class SRSLibrtmpManager {
     }
 
 
-    public native void init();
+    private native void init();
 
     /**
      * 设置url

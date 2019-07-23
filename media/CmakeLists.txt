@@ -1,0 +1,13 @@
+cmake_minimum_required(VERSION 3.4.1)
+
+set(oboe_path ${CMAKE_CURRENT_SOURCE_DIR}/../oboe)
+set(mp4v2_path ${CMAKE_CURRENT_SOURCE_DIR}/../mp4v2)
+add_subdirectory(${oboe_path} ./oboe)
+add_subdirectory(${mp4v2_path} ./mp4v2)
+
+add_library(media_k src/MediaEncoder.cpp
+        src/Mp4Mux.cpp
+        src/AudioRecordEngine.cpp)
+
+target_link_libraries(media_k mediandk oboe mp4v2)
+target_include_directories(media_k PRIVATE ${oboe_path}/include push ${mp4v2_path}/include)

@@ -4,10 +4,11 @@
 
 #include <jni.h>
 #include "push/push_rtmp.h"
-#include "media/AudioRecordEngine.h"
+#include "AudioRecordEngine.h"
 #include "push_flvenc.h"
 #include <pthread.h>
-#include "media/Mp4Mux.h"
+#include "Mp4Mux.h"
+#include <android/native_window_jni.h>
 
 extern "C"
 {
@@ -19,17 +20,19 @@ AudioRecordEnginePtr audioRecordEnginePtr;
 Mp4MuxPtr mp4Mux;
 void *mux_mp4(void *p);
 jboolean setUrl(JNIEnv *env, jobject instance, jstring url) {
-    const char *rtmp_url = env->GetStringUTFChars(url, 0);
-    int result = init_srs(rtmp_url);
-    if (result != 0) {
-        rtmp_start(javaVM);
+    const char *rtmp_url = env->GetStringUTFChars(url, JNI_FALSE);
+    if (!init_srs(rtmp_url)) {
+        env->ReleaseStringUTFChars(url, rtmp_url);
+        SRS_LOGE("init_srs error---");
+        return JNI_FALSE;
     }
+    rtmp_start(javaVM);
     if (!audioRecordEnginePtr) {
         audioRecordEnginePtr = createAudioRecordEnginePtr();
     }
     audioRecordEnginePtr->openRecordingStream();
     env->ReleaseStringUTFChars(url, rtmp_url);
-    return result != 0 ? JNI_TRUE : JNI_FALSE;
+    return JNI_TRUE;
 }
 
 void addFrame(JNIEnv *env, jobject instance, jbyteArray data, jint size, jint type, jint flag,
@@ -149,6 +152,8 @@ void init(JNIEnv *env, jobject instance) {
     media_config_p->sps = NULL;
     media_config_p->pps = NULL;
     init_queue();
+}
+void ndk_config(JNIEnv *env, jobject instance, int samplerate, int channel, int bitrate) {
 }
 /**
  * 本地函数

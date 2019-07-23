@@ -9,7 +9,7 @@ public class LibrtmpManager {
     public final static int NODE_TYPE_VIDEO = 2;
 
     {
-        System.loadLibrary("push");
+        System.loadLibrary("kpush");
     }
 
     /**
