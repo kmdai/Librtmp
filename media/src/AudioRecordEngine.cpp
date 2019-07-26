@@ -5,6 +5,9 @@
 #include "AudioRecordEngine.h"
 
 AudioRecordEngine::~AudioRecordEngine() {
+}
+
+AudioRecordEngine::AudioRecordEngine() {
 
 }
 
@@ -19,6 +22,8 @@ oboe::DataCallbackResult AudioRecordEngine::onAudioReady(oboe::AudioStream *oboe
                                                          void *audioData, int32_t numFrames) {
 
     auto *data = static_cast<short *>(audioData);
+    mMediaEncoder.processData((uint8_t *) data, numFrames * mChannel * 2,
+                              (systemnanotime() - mStartTime) / 1000);
     return oboe::DataCallbackResult::Continue;
 }
 
@@ -30,9 +35,11 @@ void AudioRecordEngine::onErrorAfterClose(oboe::AudioStream *oboeStream, oboe::R
 
 void AudioRecordEngine::startStream(oboe::AudioStream *stream) {
     if (stream) {
+        mStartTime = systemnanotime();
         oboe::Result result = stream->requestStart();
         if (result != oboe::Result::OK) {
         } else {
+
         }
     }
 }
@@ -43,6 +50,7 @@ void AudioRecordEngine::stopStream(oboe::AudioStream *stream) {
         if (result != oboe::Result::OK) {
         } else {
         }
+        mMediaEncoder.stop();
     }
 }
 
@@ -61,8 +69,8 @@ AudioRecordEngine::setupRecordingStreamParameters(oboe::AudioStreamBuilder *buil
             ->setDeviceId(mRecordingDeviceId)
             ->setDirection(oboe::Direction::Input)
             ->setChannelCount(mInputChannelCount)
-            ->setSampleRate(mSampleRate)
-            ->setBufferCapacityInFrames(2048);
+            ->setBufferCapacityInFrames(1024)
+            ->setSampleRate(mSampleRate);
     return setupCommonStreamParameters(builder);
 }
 
@@ -74,6 +82,7 @@ void AudioRecordEngine::openRecordingStream() {
     setupRecordingStreamParameters(&builder);
     auto result = builder.openStream(&mRecordStream);
     if (result == oboe::Result::OK && mRecordStream) {
+        mMediaEncoder.start();
         startStream(mRecordStream);
     }
 }
@@ -91,13 +100,33 @@ AudioRecordEngine::setupCommonStreamParameters(oboe::AudioStreamBuilder *builder
     return builder;
 }
 
-AudioRecordEngine::AudioRecordEngine() {
-
-}
 
 void AudioRecordEngine::closeRecording() {
     stopStream(mRecordStream);
     closeStream(mRecordStream);
+}
+
+void AudioRecordEngine::initCodec(uint32_t sampleRate, uint32_t channel, uint32_t bitRate,
+                                  std::string name,
+                                  std::function<void(uint8_t *, uint32_t, uint64_t,
+                                                     int)> callback) {
+    auto format = AMediaFormat_new();
+    AMediaFormat_setInt32(format, AMEDIAFORMAT_KEY_AAC_PROFILE, 2);//AACObjectLC         = 2;
+    AMediaFormat_setInt32(format, AMEDIAFORMAT_KEY_SAMPLE_RATE, mSampleRate);
+    AMediaFormat_setInt32(format, AMEDIAFORMAT_KEY_CHANNEL_COUNT, channel);
+    AMediaFormat_setString(format, AMEDIAFORMAT_KEY_MIME, "audio/mp4a-latm");
+    AMediaFormat_setInt32(format, AMEDIAFORMAT_KEY_BIT_RATE, bitRate);
+    LOGI("AudioRecordEngine::initCodec,name:%s,samplerate:%d,channel:%d,bitrate:%d", name.data(),
+         sampleRate, channel, bitRate);
+    mMediaEncoder.init(format, name.data());
+    mMediaEncoder.callback = callback;
+    AMediaFormat_delete(format);
+}
+
+int64_t AudioRecordEngine::systemnanotime() {
+    timespec now{0, 0};
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    return now.tv_sec * 1000000000LL + now.tv_nsec;
 }
 
 AudioRecordEnginePtr createAudioRecordEnginePtr() {

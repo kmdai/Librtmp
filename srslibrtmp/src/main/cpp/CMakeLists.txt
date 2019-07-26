@@ -13,7 +13,7 @@ add_subdirectory(${push_path} ./push)
 
 include_directories(${push_path})
 set(push_s
-        push/push_rtmp.c
+        srs_rtmp.c
         jni_bridge.cpp)
 
 add_library(srsPush STATIC ${push_s})

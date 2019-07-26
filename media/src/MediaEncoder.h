@@ -8,33 +8,26 @@
 #include <media/NdkMediaCodec.h>
 #include <media/NdkMediaFormat.h>
 #include <cstring>
-
-typedef struct MediaConfig {
-
-    int width;
-    int height;
-    int framerate;
-    int bitrate;
-    int i_frame_interval;
-    int color_format;
-    ANativeWindow *nativeWindow;
-    char *name;
-} MediaConfig;
-
+#include <functional>
+#include "android/log.h"
+#define LOGI(...) __android_log_print(ANDROID_LOG_INFO,"MediaEncoder--",__VA_ARGS__);
 class MediaEncoder {
 public:
     MediaEncoder();
 
-    bool init(MediaConfig *);
+    bool init(AMediaFormat *aMediaFormat, const char *name);
 
     void start();
 
     void stop();
 
+    void processData(uint8_t *data, uint32_t size, uint64_t presentationTimeUs);
+
     ~MediaEncoder();
 
+    std::function<void(uint8_t *, uint32_t, uint64_t,int)> callback{nullptr};
 private:
-    AMediaCodec *aMediaCodec;
+    AMediaCodec *aMediaCodec{nullptr};
 
 
 };

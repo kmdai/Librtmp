@@ -1,0 +1,14 @@
+cmake_minimum_required(VERSION 3.4.1)
+
+
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../polarssl-1.2.19 ./polarssl)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../librtmp ./librtmp)
+add_subdirectory(${push_path} ./push)
+
+
+set(push_path ../../../../push)
+
+
+add_library(spush STATIC push_rtmp.c)
+target_include_directories(spush PRIVATE ../librtmp ${push_path})
+target_link_libraries(spush push rtmp)

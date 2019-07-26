@@ -3,7 +3,7 @@
 //
 
 #include <jni.h>
-#include "push_rtmp.h"
+#include "srs_rtmp.h"
 #include "push_flvenc.h"
 #include <sys/prctl.h>
 
@@ -124,7 +124,7 @@ void set_framerate(uint32_t framerate) {
     }
 }
 
-void set_videodatarate(uint32_t videodatarate) {
+void setVideoBitrate(uint32_t videodatarate) {
     if (media_config_p) {
         media_config_p->videodatarate = videodatarate;
     }
@@ -136,25 +136,25 @@ void set_width(uint32_t width) {
     }
 }
 
-void set_height(uint32_t height) {
+void setHeight(uint32_t height) {
     if (media_config_p) {
         media_config_p->height = height;
     }
 }
 
-void set_audiodatarate(uint32_t audiodatarate) {
+void setAudioBitrate(uint32_t audiodatarate) {
     if (media_config_p) {
         media_config_p->audiodatarate = audiodatarate;
     }
 }
 
-void set_audiochannel(int32_t channel) {
+void seChannel(int32_t channel) {
     if (media_config_p) {
         media_config_p->channel_count = channel;
     }
 }
 
-void set_audiosamplerate(uint32_t audiosamplerate) {
+void setSamplerate(uint32_t audiosamplerate) {
     if (media_config_p) {
         media_config_p->audiosamplerate = audiosamplerate;
     }

@@ -8,7 +8,7 @@ set(src amf.c
         log.c
         parseurl.c
         rtmp.c)
-set(librtmp "rtmp")
+set(librtmp rtmp)
 
 #添加USE_POLARSSL宏定义
 add_definitions(-DUSE_POLARSSL)

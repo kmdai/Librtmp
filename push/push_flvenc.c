@@ -284,35 +284,44 @@ char *add_aac_adts(char *data, unsigned int size) {
 }
 
 int create_AACSequenceHeader(char **data, char *sequence, int size) {
-    int sequence_size = 2 + size;
+    int sequence_size = 4;
     (*data) = malloc(sequence_size);
     PutBitContext pb;
-    init_put_bits(&pb, *data, 2);
-
-    put_bits(&pb, 4, 10);//sound format aac=10
-    put_bits(&pb, 2, 3);//44kHz=3
-    put_bits(&pb, 1, 1);
-    put_bits(&pb, 1, 0);
-
-    put_bits(&pb, 8, 0);//0:aac sequence header; 1:raw
-
-    flush_put_bits(&pb);
-    memcpy(*data, sequence, size);
+//    init_put_bits(&pb, *data, 2);
+//
+//    put_bits(&pb, 4, 10);//sound format aac=10
+//    put_bits(&pb, 2, 3);//44kHz=3
+//    put_bits(&pb, 1, 1);//16 bit
+//    put_bits(&pb, 1, 0);//0 = Mono sound, 1 = Stereo sound
+//    put_bits(&pb, 8, 0);//0:aac sequence header; 1:raw
+//
+//    put_bits(&pb, 5, 2);//aac lc
+//    put_bits(&pb, 4, 4);// 44100
+//    put_bits(&pb, 4, 1);// Mono sound
+//    put_bits(&pb, 3, 0);
+//    flush_put_bits(&pb);
+    (*data)[0]=0xae;
+    (*data)[1]=0x00;
+    (*data)[2]=0x14;
+    (*data)[3]=0x08;
+//    memcpy(*data, sequence, size);
     return sequence_size;
 }
 
 int create_AudioPacket(char **data, char *nalu, int type, int size, int time) {
     int nalu_size = size + 2;
     (*data) = (char *) malloc(nalu_size);
-    PutBitContext pb;
-    init_put_bits(&pb, *data, 2);
-    put_bits(&pb, 4, 10);//sound format aac=10
-    put_bits(&pb, 2, 3);//44kHz=3
-    put_bits(&pb, 1, 1);//1 = 16-bit samples
-    put_bits(&pb, 1, 0);//0 = Mono sound
-
-    put_bits(&pb, 8, 1);//0 = AAC sequence header，1 = AAC raw。第一个音频包用0，后面的都用1
-    flush_put_bits(&pb);
+//    PutBitContext pb;
+//    init_put_bits(&pb, *data, 2);
+//    put_bits(&pb, 4, 10);//sound format aac=10
+//    put_bits(&pb, 2, 3);//44kHz=3
+//    put_bits(&pb, 1, 1);//1 = 16-bit samples
+//    put_bits(&pb, 1, 0);//0 = Mono sound
+//
+//    put_bits(&pb, 8, 1);//0 = AAC sequence header，1 = AAC raw。第一个音频包用0，后面的都用1
+//    flush_put_bits(&pb);
+    (*data)[0]=0xae;
+    (*data)[1]=0x00;
     memcpy(*data + 2, nalu, size);
     return nalu_size;
 }

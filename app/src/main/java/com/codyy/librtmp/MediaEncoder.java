@@ -1,6 +1,5 @@
 package com.codyy.librtmp;
 
-import android.annotation.TargetApi;
 import android.graphics.Bitmap;
 import android.media.AudioFormat;
 import android.media.AudioRecord;
@@ -11,17 +10,14 @@ import android.media.MediaFormat;
 import android.media.MediaRecorder;
 import android.os.Handler;
 import android.os.Message;
-import android.os.SystemClock;
 import android.text.TextUtils;
 import android.util.Log;
 import android.view.Surface;
 
 import com.codyy.librtmp.glec.EGLRender;
 import com.kmdai.rtmppush.LibrtmpManager;
-import com.kmdai.srslibrtmp.SRSLibrtmpManager;
 
 import java.io.IOException;
-import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import java.util.LinkedList;
 import java.util.Queue;
@@ -74,16 +70,15 @@ public class MediaEncoder implements android.os.Handler.Callback, EGLRender.onFr
         mCondition = mLock.newCondition();
         mHandler = new Handler(this);
         mPCMS = new LinkedList<>();
-//        mSRSLibrtmpManager = new SRSLibrtmpManager.Builder()
-//                .setaBitrate(AUDIO_BIT_RATE)
-//                .setAudioRate(AUDIO_SAMPLE_RATE)
-//                .setChannel(AUDIO_CHANNEL_COUNT)
-//                .setFrameRate(framerate)
-//                .setvBitrate(bitrate)
-//                .setWidth(width)
-//                .setHeight(height)
-//                .build();
-        mSRSLibrtmpManager=new LibrtmpManager();
+        mSRSLibrtmpManager = new LibrtmpManager.Builder()
+                .setaBitrate(AUDIO_BIT_RATE)
+                .setSampleRate(AUDIO_SAMPLE_RATE)
+                .setChannel(AUDIO_CHANNEL_COUNT)
+                .setFrameRate(framerate)
+                .setvBitrate(bitrate)
+                .setWidth(width)
+                .setHeight(height)
+                .build();
         reset();
         MediaFormat mediaFormat = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, width, height);
         MediaCodecList mediaCodecList = new MediaCodecList(MediaCodecList.REGULAR_CODECS);
@@ -168,7 +163,7 @@ public class MediaEncoder implements android.os.Handler.Callback, EGLRender.onFr
         mediaFormat.setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AACObjectLC);
         mediaFormat.setInteger(MediaFormat.KEY_CHANNEL_COUNT, AUDIO_CHANNEL_COUNT);
         mediaFormat.setInteger(MediaFormat.KEY_SAMPLE_RATE, AUDIO_SAMPLE_RATE);
-        mediaFormat.setInteger(MediaFormat.KEY_PCM_ENCODING, AudioFormat.ENCODING_PCM_16BIT);
+//        mediaFormat.setInteger(MediaFormat.KEY_PCM_ENCODING, AudioFormat.ENCODING_PCM_16BIT);
         mediaFormat.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, mMiniAudioBufferSize);
         mediaFormat.setInteger(MediaFormat.KEY_BIT_RATE, AUDIO_BIT_RATE);
 
@@ -286,11 +281,11 @@ public class MediaEncoder implements android.os.Handler.Callback, EGLRender.onFr
 
                         if (bufferInfo.flags == BUFFER_FLAG_CODEC_CONFIG) {
 //                            Log.d("RecordDecodec---", "BUFFER_FLAG_CODEC_CONFIG");
-                            mSRSLibrtmpManager.addFrame(outData, outData.length, SRSLibrtmpManager.NODE_TYPE_AUDIO, bufferInfo.flags, 0);
+                            mSRSLibrtmpManager.addFrame(outData, outData.length, 1, bufferInfo.flags, 0);
                         } else {
                             calcTotalAudioTime(bufferInfo.presentationTimeUs / 1000);
 //                            Log.d("RecordDecodec---", "bufferInfo.size:" + bufferInfo.size + "--bufferInfo.time:" + bufferInfo.presentationTimeUs + "--outData.length:" + outData.length + "--audioTimeIndex:" + audioTimeIndex);
-                            mSRSLibrtmpManager.addFrame(outData, outData.length, SRSLibrtmpManager.NODE_TYPE_AUDIO, bufferInfo.flags, audioTimeIndex);
+                            mSRSLibrtmpManager.addFrame(outData, outData.length, 1, bufferInfo.flags, audioTimeIndex);
                         }
                         outputBuffer.clear();
                     }
@@ -342,11 +337,11 @@ public class MediaEncoder implements android.os.Handler.Callback, EGLRender.onFr
 
                         if (bufferInfo.flags == BUFFER_FLAG_CODEC_CONFIG) {
 //                            Log.d("RecordDecodec---", "BUFFER_FLAG_CODEC_CONFIG");
-                            mSRSLibrtmpManager.addFrame(outData, outData.length, SRSLibrtmpManager.NODE_TYPE_AUDIO, bufferInfo.flags, 0);
+                            mSRSLibrtmpManager.addFrame(outData, outData.length, 1, bufferInfo.flags, 0);
                         } else {
                             calcTotalAudioTime(bufferInfo.presentationTimeUs / 1000);
 //                            Log.d("RecordDecodec---", "bufferInfo.size:" + bufferInfo.size + "--bufferInfo.time:" + bufferInfo.presentationTimeUs + "--outData.length:" + outData.length + "--audioTimeIndex:" + audioTimeIndex);
-                            mSRSLibrtmpManager.addFrame(outData, outData.length, SRSLibrtmpManager.NODE_TYPE_AUDIO, bufferInfo.flags, audioTimeIndex);
+                            mSRSLibrtmpManager.addFrame(outData, outData.length, 1, bufferInfo.flags, audioTimeIndex);
                         }
                         outputBuffer.clear();
                     }
@@ -418,10 +413,10 @@ public class MediaEncoder implements android.os.Handler.Callback, EGLRender.onFr
                         outputBuffer.get(outData, bufferInfo.offset, bufferInfo.size);
 
                         if (bufferInfo.flags == BUFFER_FLAG_CODEC_CONFIG) {
-                            mSRSLibrtmpManager.addFrame(outData, outData.length, SRSLibrtmpManager.NODE_TYPE_VIDEO, bufferInfo.flags, 0);
+                            mSRSLibrtmpManager.addFrame(outData, outData.length, 2, bufferInfo.flags, 0);
                         } else {
                             calcTotalTime(bufferInfo.presentationTimeUs / 1000);
-                            mSRSLibrtmpManager.addFrame(outData, outData.length, SRSLibrtmpManager.NODE_TYPE_VIDEO, bufferInfo.flags, getTimeIndex());
+                            mSRSLibrtmpManager.addFrame(outData, outData.length, 2, bufferInfo.flags, getTimeIndex());
                         }
                         outputBuffer.clear();
                     }

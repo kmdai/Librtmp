@@ -3,7 +3,7 @@
 //
 
 #include <jni.h>
-#include "push/push_rtmp.h"
+#include "srs_rtmp.h"
 #include "AudioRecordEngine.h"
 #include "push_flvenc.h"
 #include <pthread.h>
@@ -28,7 +28,7 @@ jboolean setUrl(JNIEnv *env, jobject instance, jstring url) {
     }
     rtmp_start(javaVM);
     if (!audioRecordEnginePtr) {
-        audioRecordEnginePtr = createAudioRecordEnginePtr();
+        audioRecordEnginePtr = createAudioRecordEnginePtr("");
     }
     audioRecordEnginePtr->openRecordingStream();
     env->ReleaseStringUTFChars(url, rtmp_url);
@@ -108,7 +108,7 @@ void setFrameRate(JNIEnv *env, jobject instance, jint framerate) {
 }
 
 void setVideoBitRate(JNIEnv *env, jobject instance, jint videodatarate) {
-    set_videodatarate(videodatarate);
+    setVideoBitrate(videodatarate);
 }
 
 void setWidth(JNIEnv *env, jobject instance, jint width) {
@@ -116,20 +116,20 @@ void setWidth(JNIEnv *env, jobject instance, jint width) {
 }
 
 void setHeight(JNIEnv *env, jobject instance, jint height) {
-    set_height(height);
+    setHeight(height);
 }
 
 void setAudioBitrate(JNIEnv *env, jobject instance, jint audiodatarate) {
-    set_audiodatarate(audiodatarate);
+    setAudioBitrate(audiodatarate);
 }
 
 void setChannelCount(JNIEnv *env, jobject instance, jint channel) {
-    set_audiochannel(channel);
+    seChannel(channel);
 }
 
 
 void setAudioSampleRate(JNIEnv *env, jobject instance, jint audiosamplesize) {
-    set_audiosamplerate(audiosamplesize);
+    setSamplerate(audiosamplesize);
 }
 
 void openAudioRecord(JNIEnv *env, jobject instance) {

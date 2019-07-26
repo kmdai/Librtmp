@@ -1,5 +1,10 @@
 package com.kmdai.rtmppush;
 
+import android.media.MediaCodecList;
+import android.media.MediaFormat;
+import android.text.TextUtils;
+import android.util.Log;
+
 /**
  * Created by kmdai on 18-1-25.
  */
@@ -10,6 +15,84 @@ public class LibrtmpManager {
 
     {
         System.loadLibrary("kpush");
+    }
+
+    public static class Builder {
+        int width;
+        int height;
+        int frameRate;
+        int channel;
+        int vBitrate;
+        int aBitrate;
+        int sampleRate;
+        int audioRate;
+
+        public Builder setWidth(int width) {
+            this.width = width;
+            return this;
+        }
+
+
+        public Builder setAudioRate(int audioRate) {
+            this.audioRate = audioRate;
+            return this;
+        }
+
+        public Builder setHeight(int height) {
+            this.height = height;
+            return this;
+        }
+
+        public Builder setFrameRate(int frameRate) {
+            this.frameRate = frameRate;
+            return this;
+        }
+
+        public Builder setChannel(int channel) {
+            this.channel = channel;
+            return this;
+        }
+
+        public Builder setvBitrate(int vBitrate) {
+            this.vBitrate = vBitrate;
+            return this;
+        }
+
+        public Builder setaBitrate(int aBitrate) {
+            this.aBitrate = aBitrate;
+            return this;
+        }
+
+        public Builder setSampleRate(int sampleRate) {
+            this.sampleRate = sampleRate;
+            return this;
+        }
+
+        public LibrtmpManager build() {
+            LibrtmpManager librtmpManager = new LibrtmpManager();
+            librtmpManager.setAudioBitrate(aBitrate);
+            librtmpManager.setAudioSampleRate(audioRate);
+            librtmpManager.setFrameRate(frameRate);
+            librtmpManager.setAudioSampleRate(sampleRate);
+            librtmpManager.setChannelCount(channel);
+            librtmpManager.setVideoBitRate(vBitrate);
+            librtmpManager.setWidth(width);
+            librtmpManager.setHeight(height);
+            String name = findCodecName();
+            if (TextUtils.isEmpty(name)) {
+                return null;
+            }
+            Log.d("-------", name);
+            librtmpManager.init(name);
+            return librtmpManager;
+        }
+
+        private String findCodecName() {
+            MediaFormat mediaFormat = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_AAC, sampleRate, channel);
+            MediaCodecList mediaCodecList = new MediaCodecList(MediaCodecList.REGULAR_CODECS);
+            String name = mediaCodecList.findEncoderForFormat(mediaFormat);
+            return name;
+        }
     }
 
     /**
@@ -30,22 +113,24 @@ public class LibrtmpManager {
 
     public native void release();
 
-    public native void setFrameRate(double frameRate);
+    private native void init(String audioCodecName);
 
-    public native void setVideodatarate(double videodatarate);
 
-    public native void setWidth(double width);
+    private native void setFrameRate(int frameRate);
 
-    public native void setHeight(double height);
+    private native void setVideoBitRate(int videodatarate);
 
-    public native void setChannelCount(int channelCount);
+    private native void setWidth(int width);
 
-    public native void setAudiodatarate(double audiodatarate);
+    private native void setHeight(int height);
 
-    public native void setAudiosamplerate(double audiosamplerate);
+    private native void setChannelCount(int channelCount);
 
-    public native void setAudiosamplesize(double audiosamplesize);
+    private native void setAudioBitrate(int audiodatarate);
 
-    public native Object getSurface();
+    private native void setAudioSampleRate(int audiosamplerate);
+
+
+    private native Object getSurface();
 
 }

@@ -25,6 +25,6 @@ dependencies {
     api 'com.android.support:appcompat-v7:27.1.1'
     testImplementation 'junit:junit:4.12'
     implementation project(':pushlibrary')
-    implementation project(':srslibrtmp')
+//    implementation project(':srslibrtmp')
 //    implementation project(':flvpushlibrary')
 }

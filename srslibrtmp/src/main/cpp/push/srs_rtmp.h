@@ -46,17 +46,17 @@ void rtmp_destroy();
 
 void set_framerate(uint32_t framerate);
 
-void set_videodatarate(uint32_t videodatarate);
+void setVideoBitrate(uint32_t videodatarate);
 
 void set_width(uint32_t width);
 
-void set_height(uint32_t height);
+void setHeight(uint32_t height);
 
-void set_audiodatarate(uint32_t audiodatarate);
+void setAudioBitrate(uint32_t audiodatarate);
 
-void set_audiochannel(int32_t);
+void seChannel(int32_t channel);
 
-void set_audiosamplerate(uint32_t audiosamplerate);
+void setSamplerate(uint32_t audiosamplerate);
 
 void set_audiosamplesize(uint32_t audiosamplesize);
 

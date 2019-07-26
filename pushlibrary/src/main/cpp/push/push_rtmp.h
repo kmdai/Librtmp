@@ -12,15 +12,17 @@
 #include <pthread.h>
 #include "push_utils.h"
 
+#ifdef __cplusplus
+extern "C"{
+#endif
 
 typedef struct mediaConfig {
-    double framerate;
-    double videodatarate;
-    double width;
-    double height;
-    double audiodatarate;
-    double audiosamplerate;
-    double audiosamplesize;
+    uint32_t frame_rate;
+    uint32_t video_bit_rate;
+    uint32_t width;
+    uint32_t height;
+    uint32_t audio_bit_rate;
+    uint32_t audio_sample_rate;
     int32_t channel_count;
 } media_config;
 
@@ -36,20 +38,22 @@ void rtmp_start(JavaVM *gVm);
 
 void rtmp_destroy();
 
-void set_framerate(double framerate);
+void set_framerate(uint32_t framerate);
 
-void set_videodatarate(double videodatarate);
+void setVideoBitrate(uint32_t videodatarate);
 
-void set_width(double width);
+void setWidth(uint32_t width);
 
-void set_height(double height);
+void setHeight(uint32_t height);
 
-void set_audiodatarate(double audiodatarate);
+void setAudioBitrate(uint32_t audiodatarate);
 
-void set_audiochannel(int32_t);
+void setChannel(int32_t channel);
 
-void set_audiosamplerate(double audiosamplerate);
+void setSamplerate(uint32_t audiosamplerate);
 
-void set_audiosamplesize(double audiosamplesize);
 
+#ifdef __cplusplus
+}
+#endif
 #endif //LIBRTMP_PUSH_RTMP_H

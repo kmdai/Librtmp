@@ -89,6 +89,8 @@ void *push_data(void *gVm) {
             if (node_p->flag == NODE_FLAG_CODEC_CONFIG) {
                 header_type = RTMP_PACKET_SIZE_MEDIUM;
                 size = create_AACSequenceHeader(&data, node_p->data, node_p->size);
+                SRS_LOGE("NODE_FLAG_CODEC_CONFIG----%2x,%2x", node_p->data[0],node_p->data[1]);
+                SRS_LOGE("NODE_FLAG_CODEC_CONFIG-data----%x,%x,%x,%x", data[0],data[1],data[2],data[3]);
             } else {
                 header_type = RTMP_PACKET_SIZE_LARGE;
                 size = create_AudioPacket(&data, node_p->data, node_p->flag, node_p->size, 0);
@@ -143,52 +145,48 @@ void rtmp_start(JavaVM *gVm) {
     pthread_setname_np(pthread, "rtmp push data");
 }
 
-void set_framerate(double framerate) {
+void set_framerate(uint32_t framerate) {
     if (media_config_p) {
-        media_config_p->framerate = framerate;
+        media_config_p->frame_rate = framerate;
     }
 }
 
-void set_videodatarate(double videodatarate) {
+void setVideoBitrate(uint32_t videodatarate) {
     if (media_config_p) {
-        media_config_p->videodatarate = videodatarate;
+        media_config_p->video_bit_rate = videodatarate;
     }
 }
 
-void set_width(double width) {
+void setWidth(uint32_t width) {
     if (media_config_p) {
         media_config_p->width = width;
     }
 }
 
-void set_height(double height) {
+void setHeight(uint32_t height) {
     if (media_config_p) {
         media_config_p->height = height;
     }
 }
 
-void set_audiodatarate(double audiodatarate) {
+void setAudioBitrate(uint32_t audiodatarate) {
     if (media_config_p) {
-        media_config_p->audiodatarate = audiodatarate;
+        media_config_p->audio_bit_rate = audiodatarate;
     }
 }
 
-void set_audiochannel(int32_t channel) {
+void setChannel(int32_t channel) {
     if (media_config_p) {
         media_config_p->channel_count = channel;
     }
 }
 
-void set_audiosamplerate(double audiosamplerate) {
+void setSamplerate(uint32_t audiosamplerate) {
     if (media_config_p) {
-        media_config_p->audiosamplerate = audiosamplerate;
+        media_config_p->audio_sample_rate = audiosamplerate;
     }
 }
 
-void set_audiosamplesize(double audiosamplesize) {
-    if (media_config_p) {
-        media_config_p->audiosamplesize = audiosamplesize;
-    }
-}
+
 
 
