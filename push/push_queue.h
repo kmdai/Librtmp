@@ -11,6 +11,7 @@
 #include <string.h>
 #include <pthread.h>
 #include "push_utils.h"
+
 #ifdef __cplusplus
 extern "C"
 {
@@ -29,7 +30,8 @@ extern "C"
 #define NODE_FLAG_KEY_FRAME 1
 typedef enum _node_tpye {
     NODE_TYPE_AUDIO = 1,
-    NODE_TYPE_VIDEO
+    NODE_TYPE_VIDEO,
+    NODE_TYPE_METADATA
 } node_type;
 /**
  *p帧

@@ -9,10 +9,12 @@
 
 RTMP *m_pRtmp;
 media_config *media_config_p = NULL;
+bool mate_data = false;
 
 int init_srs(const char *url) {
-    media_config_p = (media_config *) malloc(sizeof(media_config));
     init_queue();
+    media_config_p = (media_config *) malloc(sizeof(media_config));
+    memset(media_config_p, 0, sizeof(media_config));
     m_pRtmp = RTMP_Alloc();
     if (m_pRtmp) {
         RTMP_Init(m_pRtmp);
@@ -83,14 +85,48 @@ void *push_data(void *gVm) {
         int size = 0;
         int channel;
         char *data;
-        if (node_p->type == NODE_TYPE_AUDIO) {
+        if (!mate_data) {
+            mate_data = true;
+            q_node_p node = create_node(data, 0,
+                                        NODE_TYPE_METADATA, NODE_TYPE_METADATA, 0);
+            in_queue(node);
+        }
+        if (node_p->type == NODE_TYPE_METADATA) {
+            packet_type = RTMP_PACKET_TYPE_INFO;
+            header_type = RTMP_PACKET_SIZE_MEDIUM;
+            channel = 0x03;
+            size = create_MetaData(&data, media_config_p->frame_rate,
+                                   media_config_p->video_bit_rate / 1000.0,
+                                   7,
+                                   media_config_p->width,
+                                   media_config_p->height,
+                                   10,
+                                   media_config_p->audio_bit_rate / 1000.0,
+                                   media_config_p->audio_sample_rate,
+                                   16.0,
+                                   0);
+            SRS_LOGE(
+                    "NODE_TYPE_METADATA:frame_rate:%d,video_bit_rate:%d,video_id:%d,width:%d,height:%d,audio_id:%d,audio_bit_rate;%d,audio_sample_rate:%d,bit_size;%d",
+                    media_config_p->frame_rate,
+                    media_config_p->video_bit_rate,
+                    7,
+                    media_config_p->width,
+                    media_config_p->height,
+                    10,
+                    media_config_p->audio_bit_rate,
+                    media_config_p->audio_sample_rate,
+                    16,
+                    0);
+            SRS_LOGE("NODE_TYPE_METADATA:time;%ld", node_p->time);
+        } else if (node_p->type == NODE_TYPE_AUDIO) {
             packet_type = RTMP_PACKET_TYPE_AUDIO;
-            channel = 0x04;
+            channel = 0x05;
             if (node_p->flag == NODE_FLAG_CODEC_CONFIG) {
                 header_type = RTMP_PACKET_SIZE_MEDIUM;
                 size = create_AACSequenceHeader(&data, node_p->data, node_p->size);
-                SRS_LOGE("NODE_FLAG_CODEC_CONFIG----%2x,%2x", node_p->data[0],node_p->data[1]);
-                SRS_LOGE("NODE_FLAG_CODEC_CONFIG-data----%x,%x,%x,%x", data[0],data[1],data[2],data[3]);
+//                SRS_LOGE("NODE_FLAG_CODEC_CONFIG----%2x,%2x", node_p->data[0], node_p->data[1]);
+//                SRS_LOGE("NODE_FLAG_CODEC_CONFIG-data----%2x,%2x,%2x,%2x,%2x,%2x,%2x", data[0],
+//                         data[1], data[2], data[3], data[4], data[5], data[6]);
             } else {
                 header_type = RTMP_PACKET_SIZE_LARGE;
                 size = create_AudioPacket(&data, node_p->data, node_p->flag, node_p->size, 0);
@@ -136,6 +172,10 @@ void *push_data(void *gVm) {
     return (void *) 1;
 }
 
+void set_config(media_config *config) {
+    media_config_p = config;
+}
+
 void rtmp_start(JavaVM *gVm) {
     pthread_t pthread;
     int result = pthread_create(&pthread, NULL, push_data, gVm);
@@ -151,37 +191,37 @@ void set_framerate(uint32_t framerate) {
     }
 }
 
-void setVideoBitrate(uint32_t videodatarate) {
+void set_VideoBitrate(uint32_t videodatarate) {
     if (media_config_p) {
         media_config_p->video_bit_rate = videodatarate;
     }
 }
 
-void setWidth(uint32_t width) {
+void set_Width(uint32_t width) {
     if (media_config_p) {
         media_config_p->width = width;
     }
 }
 
-void setHeight(uint32_t height) {
+void set_Height(uint32_t height) {
     if (media_config_p) {
         media_config_p->height = height;
     }
 }
 
-void setAudioBitrate(uint32_t audiodatarate) {
+void set_AudioBitrate(uint32_t audiodatarate) {
     if (media_config_p) {
         media_config_p->audio_bit_rate = audiodatarate;
     }
 }
 
-void setChannel(int32_t channel) {
+void set_Channel(int32_t channel) {
     if (media_config_p) {
         media_config_p->channel_count = channel;
     }
 }
 
-void setSamplerate(uint32_t audiosamplerate) {
+void set_Samplerate(uint32_t audiosamplerate) {
     if (media_config_p) {
         media_config_p->audio_sample_rate = audiosamplerate;
     }

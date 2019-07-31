@@ -40,17 +40,19 @@ void rtmp_destroy();
 
 void set_framerate(uint32_t framerate);
 
-void setVideoBitrate(uint32_t videodatarate);
+void set_VideoBitrate(uint32_t videodatarate);
 
-void setWidth(uint32_t width);
+void set_Width(uint32_t width);
 
-void setHeight(uint32_t height);
+void set_Height(uint32_t height);
 
-void setAudioBitrate(uint32_t audiodatarate);
+void set_config(media_config *config);
 
-void setChannel(int32_t channel);
+void set_AudioBitrate(uint32_t audiodatarate);
 
-void setSamplerate(uint32_t audiosamplerate);
+void set_Channel(int32_t channel);
+
+void set_Samplerate(uint32_t audiosamplerate);
 
 
 #ifdef __cplusplus

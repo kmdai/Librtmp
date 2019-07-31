@@ -22,8 +22,9 @@ oboe::DataCallbackResult AudioRecordEngine::onAudioReady(oboe::AudioStream *oboe
                                                          void *audioData, int32_t numFrames) {
 
     auto *data = static_cast<short *>(audioData);
+    frames += numFrames;
     mMediaEncoder.processData((uint8_t *) data, numFrames * mChannel * 2,
-                              (systemnanotime() - mStartTime) / 1000);
+                              (frames * 1000 / mSampleRate));
     return oboe::DataCallbackResult::Continue;
 }
 
@@ -69,7 +70,7 @@ AudioRecordEngine::setupRecordingStreamParameters(oboe::AudioStreamBuilder *buil
             ->setDeviceId(mRecordingDeviceId)
             ->setDirection(oboe::Direction::Input)
             ->setChannelCount(mInputChannelCount)
-            ->setBufferCapacityInFrames(1024)
+            ->setFramesPerCallback(1024)
             ->setSampleRate(mSampleRate);
     return setupCommonStreamParameters(builder);
 }
@@ -119,6 +120,7 @@ void AudioRecordEngine::initCodec(uint32_t sampleRate, uint32_t channel, uint32_
     LOGI("AudioRecordEngine::initCodec,name:%s,samplerate:%d,channel:%d,bitrate:%d", name.data(),
          sampleRate, channel, bitRate);
     mMediaEncoder.init(format, name.data());
+    frames = 0;
     mMediaEncoder.callback = callback;
     AMediaFormat_delete(format);
 }

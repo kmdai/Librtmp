@@ -26,7 +26,7 @@ void MediaEncoder::processData(uint8_t *data, uint32_t size, uint64_t presentati
     if (bufidx >= 0) {
         size_t bufsize;
         auto buf = AMediaCodec_getInputBuffer(aMediaCodec, bufidx, &bufsize);
-//        LOGI("size:%d,time:%ld,bufsize:%d", size, presentationTimeUs, bufsize);
+        LOGI("---size:%d,time:%ld,bufsize:%d", size, presentationTimeUs, bufsize);
         memcpy(buf, data, size);
         AMediaCodec_queueInputBuffer(aMediaCodec, bufidx, 0, size, presentationTimeUs, 0);
     }

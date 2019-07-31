@@ -50,7 +50,7 @@ public class MediaEncoder implements android.os.Handler.Callback, EGLRender.onFr
     private Handler mHandler;
     AtomicBoolean mIsStop = new AtomicBoolean(false);
     //            private LibrtmpManager mLibrtmpManager;
-    private String mRtmpUrl = "rtmp://10.23.164.30:1935/srs/kmdai";
+    private String mRtmpUrl = "rtmp://192.168.137.1:1935/srs/kmdai";
     //                RTMPMuxer mRTMPMuxer;
     long indexTime = 0;
 //    private SRSLibrtmpManager mSRSLibrtmpManager;

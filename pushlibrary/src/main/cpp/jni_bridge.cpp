@@ -14,12 +14,20 @@ AudioRecordEnginePtr audioRecordEnginePtr;
 #define JNI_CLS_MANAGER "com/kmdai/rtmppush/LibrtmpManager"
 static JavaVM *javaVM;
 media_config media_config_{0};
+long frames{0};
 static jboolean native_setUrl(JNIEnv *env, jobject instance, jstring url) {
     const char *rtmp_url = env->GetStringUTFChars(url, JNI_FALSE);
     int result = init_srs(rtmp_url);
     if (!result) {
         return JNI_FALSE;
     }
+    set_framerate(media_config_.frame_rate);
+    set_VideoBitrate(media_config_.video_bit_rate);
+    set_Width(media_config_.width);
+    set_Height(media_config_.height);
+    set_AudioBitrate(media_config_.audio_bit_rate);
+    set_Channel(media_config_.channel_count);
+    set_Samplerate(media_config_.audio_sample_rate);
     audioRecordEnginePtr->openRecordingStream();
     rtmp_start(javaVM);
     env->ReleaseStringUTFChars(url, rtmp_url);
@@ -62,37 +70,30 @@ static void native_release(JNIEnv *env, jobject instance) {
 }
 
 static void native_setFrameRate(JNIEnv *env, jobject instance, jint framerate) {
-    set_framerate(static_cast<uint32_t >(framerate));
     media_config_.frame_rate = static_cast<uint32_t >(framerate);
 }
 
 static void native_setVideoBitRate(JNIEnv *env, jobject instance, jint videodatarate) {
-    setVideoBitrate(static_cast<uint32_t >(videodatarate));
     media_config_.video_bit_rate = static_cast<uint32_t >(videodatarate);
 }
 
 static void native_setWidth(JNIEnv *env, jobject instance, jint width) {
-    setWidth(static_cast<uint32_t >(width));
     media_config_.width = static_cast<uint32_t >(width);
 }
 
 static void native_setHeight(JNIEnv *env, jobject instance, jint height) {
-    setHeight(static_cast<uint32_t >(height));
     media_config_.height = static_cast<uint32_t >(height);
 }
 
 static void native_setAudioBitrate(JNIEnv *env, jobject instance, jint audioBitrate) {
-    setAudioBitrate(static_cast<uint32_t >(audioBitrate));
     media_config_.audio_bit_rate = static_cast<uint32_t >(audioBitrate);
 }
 
 static void native_setChannelCount(JNIEnv *env, jobject instance, jint channel) {
     media_config_.channel_count = static_cast<uint32_t >(channel);
-    setChannel(static_cast<uint32_t >(channel));
 }
 
 static void native_setAudioSampleRate(JNIEnv *env, jobject instance, jint audiosamplerate) {
-    setSamplerate(static_cast<uint32_t >(audiosamplerate));
     media_config_.audio_sample_rate = static_cast<uint32_t >(audiosamplerate);
 }
 

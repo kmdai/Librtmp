@@ -59,6 +59,8 @@ private:
     int64_t mStartTime{0};
 
     int64_t systemnanotime();
+
+    long frames{0};
 };
 
 using AudioRecordEnginePtr =std::shared_ptr<AudioRecordEngine>;

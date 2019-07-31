@@ -15,7 +15,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="rtmp://10.23.164.30:1935/srs/kmdai"
+            android:text="rtmp://192.168.137.1:1935/srs/kmdai"
             android:hint="rtmp://" />
 
         <android.support.v7.widget.AppCompatSpinner

@@ -6,6 +6,7 @@
 #include <string.h>
 #include <memory.h>
 #include <malloc.h>
+#include "amf.h"
 #include "push_utils.h"
 // AMF0 marker
 #define RTMP_AMF0_Number                     0x00
@@ -156,14 +157,18 @@ int create_MetaData(char **data, double framerate, double videodatarate, double 
                     double width,
                     double height, double audiocodecid, double audiodatarate,
                     double audiosamplerate, double audiosamplesize, int stereo) {
-    char *start = (char *) malloc(256);
-    memset(start, 0, 256);
+    char *start = (char *) malloc(1024);
+    memset(start, 0, 1024);
     char *out = start;
     out = put_byte(out, RTMP_AMF0_String);
     out = put_string(out, "onMetaData");
     out = put_byte(out, RTMP_AMF0_EcmaArray);
-    out = put_32byte(out, 10);
+    out = put_32byte(out, 12);
     //编码方式
+    out = put_string(out, "duration");
+    out = put_64byte(out, 0.0);
+    out = put_string(out, "fileSize");
+    out = put_64byte(out, 0.0);
     out = put_string(out, "framerate");
     out = put_64byte(out, framerate);
     out = put_string(out, "videocodecid");
@@ -187,10 +192,9 @@ int create_MetaData(char **data, double framerate, double videodatarate, double 
     out = put_byte(out, stereo);
     out = put_16byte(out, 0);
     out = put_byte(out, RTMP_AMF0_ObjectEnd);
+
     int size = (int) (out - start);
-
     *data = (char *) malloc(size);
-
     memcpy(*data, start, size);
     SRS_LOGE("---create_MetaData:size=%d", size);
     free(start);
@@ -251,21 +255,17 @@ int create_VideoPacket(char **data, char *nalu, int type, int size, int time) {
 }
 
 
-char *add_aac_adts(char *data, unsigned int size) {
+int add_aac_adts(char *data, unsigned int size) {
     unsigned int adts_size = size + ADTS_HEADER_SIZE;
-    char *adts_data = (char *) malloc(adts_size);
-    memset(adts_data, 0, adts_size);
-    memcpy(adts_data + ADTS_HEADER_SIZE, data, size);
-//    addADTStoPacket(adts_data, adts_size);
+    char *dst = data;
     PutBitContext pb;
-    init_put_bits(&pb, adts_data, ADTS_HEADER_SIZE);
-
+    init_put_bits(&pb, dst, ADTS_HEADER_SIZE);
     /* adts_fixed_header */
     put_bits(&pb, 12, 0xfff);   /* syncword */
     put_bits(&pb, 1, 0);        /* ID  0标识MPEG-4，1标识MPEG-2*/
     put_bits(&pb, 2, 0);        /* layer */
     put_bits(&pb, 1, 1);        /* protection_absent */
-    put_bits(&pb, 2, 2 - 1);        /* profile_objecttype */
+    put_bits(&pb, 2, 1);       /* 0:main 1:lc 2:ssr*/
     put_bits(&pb, 4, 4);
     put_bits(&pb, 1, 0);        /* private_bit */
     put_bits(&pb, 3, 1);        /* channel_configuration */
@@ -278,50 +278,53 @@ char *add_aac_adts(char *data, unsigned int size) {
     put_bits(&pb, 13, adts_size); /* aac_frame_length */
     put_bits(&pb, 11, 0x7ff);   /* adts_buffer_fullness */
     put_bits(&pb, 2, 0);        /* number_of_raw_data_blocks_in_frame */
-
     flush_put_bits(&pb);
-    return adts_data;
+    return adts_size;
 }
 
 int create_AACSequenceHeader(char **data, char *sequence, int size) {
-    int sequence_size = 4;
-    (*data) = malloc(sequence_size);
+    int sequence_size = 2 + 2;
+    (*data) = malloc(sequence_size * sizeof(char));
+    memset(*data, 0, sequence_size * sizeof(char));
     PutBitContext pb;
-//    init_put_bits(&pb, *data, 2);
-//
-//    put_bits(&pb, 4, 10);//sound format aac=10
-//    put_bits(&pb, 2, 3);//44kHz=3
-//    put_bits(&pb, 1, 1);//16 bit
-//    put_bits(&pb, 1, 0);//0 = Mono sound, 1 = Stereo sound
-//    put_bits(&pb, 8, 0);//0:aac sequence header; 1:raw
-//
-//    put_bits(&pb, 5, 2);//aac lc
-//    put_bits(&pb, 4, 4);// 44100
-//    put_bits(&pb, 4, 1);// Mono sound
-//    put_bits(&pb, 3, 0);
-//    flush_put_bits(&pb);
-    (*data)[0]=0xae;
-    (*data)[1]=0x00;
-    (*data)[2]=0x14;
-    (*data)[3]=0x08;
+    init_put_bits(&pb, *data, sequence_size);
+
+    put_bits(&pb, 4, 10);//sound format aac=10
+    put_bits(&pb, 2, 3);//44kHz=3
+    put_bits(&pb, 1, 1);//16 bit
+    put_bits(&pb, 1, 0);//0 = Mono sound, 1 = Stereo sound
+    put_bits(&pb, 8, 0);//0:aac sequence header; 1:raw
+
+    put_bits(&pb, 5, 2);//aac lc
+    put_bits(&pb, 4, 4);// 44100
+    put_bits(&pb, 4, 1);// Mono sound
+    put_bits(&pb, 1, 0);//frame length
+    put_bits(&pb, 1, 0);//dependsOnCoreCoder
+    put_bits(&pb, 1, 0);//extensionFlag
+//    put_bits(&pb, 11, 0x2b7);
+//    put_bits(&pb, 5, 5);
+//    put_bits(&pb, 1, 0);
+    flush_put_bits(&pb);
 //    memcpy(*data, sequence, size);
     return sequence_size;
 }
 
 int create_AudioPacket(char **data, char *nalu, int type, int size, int time) {
-    int nalu_size = size + 2;
-    (*data) = (char *) malloc(nalu_size);
-//    PutBitContext pb;
-//    init_put_bits(&pb, *data, 2);
-//    put_bits(&pb, 4, 10);//sound format aac=10
-//    put_bits(&pb, 2, 3);//44kHz=3
-//    put_bits(&pb, 1, 1);//1 = 16-bit samples
-//    put_bits(&pb, 1, 0);//0 = Mono sound
-//
-//    put_bits(&pb, 8, 1);//0 = AAC sequence header，1 = AAC raw。第一个音频包用0，后面的都用1
-//    flush_put_bits(&pb);
-    (*data)[0]=0xae;
-    (*data)[1]=0x00;
-    memcpy(*data + 2, nalu, size);
+    int nalu_size = 2 + size;
+    (*data) = (char *) malloc(nalu_size * sizeof(char));
+    char *dst = (*data);
+    memset(dst, 0, nalu_size * sizeof(char));
+    PutBitContext pb;
+    init_put_bits(&pb, dst, 2);
+    put_bits(&pb, 4, 10);//sound format aac=10
+    put_bits(&pb, 2, 3);//44kHz=3
+    put_bits(&pb, 1, 1);//1 = 16-bit samples
+    put_bits(&pb, 1, 0);//0 = Mono sound
+    put_bits(&pb, 8, 1);//0 = AAC sequence header，1 = AAC raw。第一个音频包用0，后面的都用1
+    flush_put_bits(&pb);
+
+//    add_aac_adts(dst + 2, size);
+//    addADTStoPacket(dst + 2,size);
+    memcpy(dst + 2, nalu, size);
     return nalu_size;
 }

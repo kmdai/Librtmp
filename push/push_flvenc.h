@@ -49,7 +49,7 @@ int create_AACSequenceHeader(char **data, char *sequence, int size);
 
 int create_AudioPacket(char **data, char *nalu, int type, int size, int time);
 
-char *add_aac_adts(char *data, unsigned int size);
+int add_aac_adts(char *data, unsigned int size);
 
 int find_sps_pps_pos(char *data, int size, int offset, uint32_t *prefix);
 

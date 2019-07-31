@@ -7,6 +7,7 @@ add_subdirectory(${mp4v2_path} ./mp4v2)
 
 add_library(media_k src/MediaEncoder.cpp
         src/Mp4Mux.cpp
+        src/FileSource.cpp
         src/AudioRecordEngine.cpp)
 
 target_link_libraries(media_k mediandk oboe log mp4v2)
